@@ -177,24 +177,8 @@ On remettra une vraie authentification en phase 2.
 </script>
 <!-- ═══════════════════════════════════════════════════ -->
 
-<!-- ── Écran de choix du profil ── -->
-<div id="ecranConnexion">
-  <div class="boite">
-    <h1 class="marque">La <span>Fonte</span></h1>
-    <div class="devise">Charge · Mange · Progresse</div>
-    <div class="carte">
-      <div class="carte-titre">Qui es-tu ?</div>
-      <div id="listeProfils"><div class="vide">Chargement…</div></div>
-      <label style="margin-top:6px;">Ou nouveau prénom</label>
-      <input type="text" id="prenom" class="champ" autocomplete="given-name" onkeydown="if(event.key==='Enter')creerProfil()">
-      <button class="btn btn-accent" onclick="creerProfil()">C'est parti 💪</button>
-      <div id="erreurConnexion" style="color:var(--rose); font-size:13px; margin-top:10px; text-align:center;"></div>
-    </div>
-  </div>
-</div>
-
 <!-- ── App ── -->
-<div id="app" class="hidden">
+<div id="app">
   <div class="page">
     <div class="entete">
       <h1 class="marque">La <span>Fonte</span></h1>
@@ -399,6 +383,10 @@ On remettra une vraie authentification en phase 2.
     <!-- ═══ PROFIL ═══ -->
     <div id="onglet-profil" class="hidden">
       <div class="carte">
+        <div class="carte-titre">Utilisateur</div>
+        <div class="selecteur-user" id="selecteurUtilisateur" style="margin-bottom:0;"></div>
+      </div>
+      <div class="carte">
         <div class="carte-titre" id="profilNom">—</div>
         <div class="ligne-champs">
           <div><label>Sexe</label><select id="pSexe" class="champ"><option value="h">Homme</option><option value="f">Femme</option></select></div>
@@ -443,7 +431,6 @@ On remettra une vraie authentification en phase 2.
         <div class="carte-titre">Santé iPhone</div>
         <div class="sous-texte" style="line-height:1.5;">Les pas et calories actives pourront remonter automatiquement via l'app Raccourcis (guide à venir).</div>
       </div>
-      <button class="btn btn-contour" style="width:100%;" onclick="deconnexion()">Changer d'utilisateur</button>
     </div>
   </div>
 
@@ -512,95 +499,60 @@ function aujourdhuiISO(){ const d=new Date(); return d.getFullYear()+"-"+String(
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
 function echap(s){ const d=document.createElement("div"); d.textContent=s==null?"":String(s); return d.innerHTML; }
 
-// ═══════════ PROFILS (sans mot de passe) ═══════════
-function slug(prenom){
-  return prenom.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
-}
+// ═══════════ PROFILS FIXES (démarrage direct, sans écran de connexion) ═══════════
+const PROFILS_EQUIPE = { florian: "Florian", gaetan: "Gaétan", kevin: "Kevin" };
 
-async function afficherEcranProfils(){
-  document.getElementById("ecranConnexion").classList.remove("hidden");
-  document.getElementById("app").classList.add("hidden");
-  try{
-    const snap = await db.collection("users").get();
-    const c = document.getElementById("listeProfils");
-    c.innerHTML = "";
-    if(snap.empty){
-      c.innerHTML = '<div class="vide">Premier arrivé ! Entre ton prénom ci-dessous.</div>';
-    }else{
-      snap.docs.forEach(d => {
-        const b = document.createElement("button");
-        b.className = "btn btn-contour";
-        b.style.cssText = "width:100%; margin-bottom:8px;";
-        b.textContent = d.data().prenom;
-        b.onclick = () => connecterProfil(d.id, d.data().prenom);
-        c.appendChild(b);
-      });
-    }
-  }catch(e){
-    document.getElementById("listeProfils").innerHTML = "";
-    document.getElementById("erreurConnexion").textContent = "Connexion à la base impossible. Vérifie la config Firebase et les règles Firestore.";
-  }
-}
-
-async function creerProfil(){
-  const prenom = document.getElementById("prenom").value.trim();
-  const err = document.getElementById("erreurConnexion");
-  err.textContent = "";
-  if(!prenom){ err.textContent = "Entre ton prénom"; return; }
-  if(!slug(prenom)){ err.textContent = "Prénom invalide"; return; }
-  try{
-    await connecterProfil(slug(prenom), prenom);
-  }catch(e){
-    err.textContent = "Connexion impossible. Vérifie la config Firebase et les règles Firestore.";
-  }
+function rendreSelecteurUtilisateur(){
+  const c = document.getElementById("selecteurUtilisateur");
+  if(!c) return;
+  c.innerHTML = "";
+  Object.entries(PROFILS_EQUIPE).forEach(([uid, prenom]) => {
+    const b = document.createElement("button");
+    b.textContent = prenom;
+    if(moi && moi.uid===uid) b.classList.add("actif");
+    b.onclick = () => {
+      if(moi && moi.uid===uid) return;
+      try{ localStorage.setItem("lafonte_uid", uid); }catch(e){}
+      location.reload();
+    };
+    c.appendChild(b);
+  });
 }
 
 async function connecterProfil(uid, prenom){
-  const ref = db.collection("users").doc(uid);
-  const existant = await ref.get();
-  if(existant.exists){
-    await ref.set({ prenom: prenom }, { merge: true });
-  }else{
-    await ref.set({ prenom: prenom, creeLe: Date.now() });
-  }
-  try{
-    localStorage.setItem("lafonte_uid", uid);
-    localStorage.setItem("lafonte_prenom", prenom);
-  }catch(e){}
-  const d = existant.exists ? existant.data() : { prenom: prenom };
-  moi = { uid: uid, prenom: d.prenom || prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [] };
-  userRepasAffiche = moi.uid;
-  userProgresAffiche = moi.uid;
-  document.getElementById("ecranConnexion").classList.add("hidden");
-  document.getElementById("app").classList.remove("hidden");
-  document.getElementById("profilNom").textContent = moi.prenom;
-  remplirChampsPlan();
+  moi = { uid: uid, prenom: prenom, objectifKcal: null, plan: null, favoris: [] };
+  userRepasAffiche = uid;
+  userProgresAffiche = uid;
+  document.getElementById("profilNom").textContent = prenom;
   const auj = new Date();
   document.getElementById("dateJour").textContent = JOURS[auj.getDay()] + " " + auj.getDate() + " " + MOIS[auj.getMonth()];
   if(FONCTION_ANALYSE_URL) document.getElementById("btnAnalyseIA").classList.remove("hidden");
-  demarrerEcoutes();
-}
-
-function deconnexion(){
+  rendreSelecteurUtilisateur();
   try{
-    localStorage.removeItem("lafonte_uid");
-    localStorage.removeItem("lafonte_prenom");
-  }catch(e){}
-  location.reload();
-}
-
-// Démarrage : reconnexion automatique si un profil est mémorisé sur cet appareil
-window.addEventListener("DOMContentLoaded", () => {
-  let uid = null, prenom = null;
-  try{
-    uid = localStorage.getItem("lafonte_uid");
-    prenom = localStorage.getItem("lafonte_prenom");
-  }catch(e){}
-  if(uid && prenom){
-    connecterProfil(uid, prenom).catch(() => afficherEcranProfils());
-  }else{
-    afficherEcranProfils();
+    const ref = db.collection("users").doc(uid);
+    const existant = await ref.get();
+    if(existant.exists){
+      const d = existant.data();
+      moi.objectifKcal = d.objectifKcal || null;
+      moi.plan = d.plan || null;
+      moi.favoris = d.favoris || [];
+    }else{
+      await ref.set({ prenom: prenom, creeLe: Date.now() });
+    }
+    demarrerEcoutes();
+  }catch(e){
+    toast("⚠️ Firebase pas configuré : rien ne sera sauvegardé");
   }
+  remplirChampsPlan();
+}
+
+// Démarrage : dernier profil utilisé sur cet appareil, sinon Florian
+window.addEventListener("DOMContentLoaded", () => {
+  let uid = null;
+  try{ uid = localStorage.getItem("lafonte_uid"); }catch(e){}
+  if(!uid || !PROFILS_EQUIPE[uid]) uid = "florian";
+  try{ localStorage.setItem("lafonte_uid", uid); }catch(e){}
+  connecterProfil(uid, PROFILS_EQUIPE[uid]);
 });
 
 // ═══════════ ÉCOUTES TEMPS RÉEL ═══════════
