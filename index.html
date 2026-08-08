@@ -150,6 +150,28 @@
   .toast{position:fixed; top:calc(14px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); background:var(--carte2); border:1px solid var(--ligne); color:var(--craie); padding:11px 20px; border-radius:99px; font-size:14px; font-weight:600; z-index:110; box-shadow:0 6px 20px rgba(0,0,0,.5); white-space:nowrap;}
   canvas{max-width:100%;}
   .vide{text-align:center; color:var(--gris); font-size:14px; padding:22px 0; line-height:1.5;}
+
+  .jours-scroll{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; margin-bottom:2px; -webkit-overflow-scrolling:touch;}
+  .jours-scroll button{flex-shrink:0; min-width:52px; padding:8px 10px; border-radius:12px; border:1.5px solid var(--ligne); background:var(--carte); color:var(--craie); font-family:'Archivo'; font-weight:800; font-size:15px; text-align:center;}
+  .jours-scroll button .jj{display:block; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--gris); font-weight:700; margin-bottom:1px;}
+  .jours-scroll button.actif{border-color:var(--accent); background:rgba(255,107,26,.12); color:var(--accent);}
+  .jours-scroll button.actif .jj{color:var(--accent);}
+
+  /* ── Écrans courts / carrés (ex: Unihertz Titan 2 Elite, ~1080×1200) ──
+     Ne s'active que sous 520px de hauteur visible : aucun impact sur iPhone. */
+  @media (max-height: 520px){
+    .page{padding:10px 12px 16px;}
+    .entete{margin-bottom:10px;}
+    .entete h1{font-size:20px;}
+    .carte{padding:11px; margin-bottom:8px; border-radius:12px;}
+    .carte-titre{margin-bottom:8px;}
+    .mega-temps{font-size:56px;}
+    .chrono{font-size:26px;}
+    .voile{padding:12px; gap:10px;}
+    nav button{padding:6px 0 5px; font-size:9px; gap:2px;}
+    nav .picto{font-size:18px;}
+    body{padding-bottom:calc(58px + env(safe-area-inset-bottom));}
+  }
 </style>
 </head>
 <body>
@@ -372,6 +394,11 @@ service cloud.firestore {
           </div>
           <button class="btn btn-accent" onclick="enregistrerRepasManuel()">Enregistrer le repas</button>
         </div>
+      </div>
+
+      <div class="jours-scroll" id="selecteurJourRepas"></div>
+      <div class="carte hidden" id="noteHistorique" style="text-align:center; padding:12px;">
+        <div class="sous-texte">📅 Tu consultes un jour passé. <button style="background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;font-size:13px;font-weight:600;" onclick="revenirAujourdhuiRepas()">Revenir à aujourd'hui</button></div>
       </div>
 
       <div class="carte">
@@ -634,6 +661,7 @@ let routines = [];
 let modeInscription = false;
 let userRepasAffiche = null;
 let listeRepasEtendue = false;
+let dateRepasAffichee = null;
 let userProgresAffiche = null;
 let seanceEnCours = null;
 let routineActive = null;
@@ -720,6 +748,7 @@ auth.onAuthStateChanged(async (user) => {
     moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [], objectifPoids: d.objectifPoids || null };
     userRepasAffiche = moi.uid;
     userProgresAffiche = moi.uid;
+    dateRepasAffichee = aujourdhuiISO();
     document.getElementById("ecranConnexion").classList.add("hidden");
     document.getElementById("app").classList.remove("hidden");
     document.getElementById("profilNom").textContent = moi.prenom;
@@ -822,7 +851,7 @@ function rendreSelecteursUsers(){
       c.appendChild(b);
     });
   };
-  faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; listeRepasEtendue=false; rendreSelecteursUsers(); rendreRepas(); });
+  faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; listeRepasEtendue=false; dateRepasAffichee=aujourdhuiISO(); rendreSelecteursUsers(); rendreRepas(); });
   faire("selecteurUserProgres", userProgresAffiche, (uid)=>{ userProgresAffiche=uid; rendreSelecteursUsers(); rendreChoixExos(); afficherProgression(); rendreVolumeGroupes(); });
 }
 
@@ -1605,9 +1634,38 @@ async function supprimerRepas(id){
   await db.collection("repas").doc(id).delete();
 }
 
+function formatDateISO(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+
+function rendreSelecteurJourRepas(){
+  const c = document.getElementById("selecteurJourRepas");
+  if(!c) return;
+  const NB_JOURS = 14;
+  c.innerHTML = "";
+  for(let i = NB_JOURS-1; i >= 0; i--){
+    const d = new Date();
+    d.setDate(d.getDate()-i);
+    const iso = formatDateISO(d);
+    const b = document.createElement("button");
+    const libelleHaut = i===0 ? "Auj." : (i===1 ? "Hier" : JOURS[d.getDay()].slice(0,3));
+    b.innerHTML = '<span class="jj">'+libelleHaut+'</span>'+d.getDate();
+    if(iso===dateRepasAffichee) b.classList.add("actif");
+    b.onclick = () => { dateRepasAffichee=iso; listeRepasEtendue=false; rendreRepas(); };
+    c.appendChild(b);
+  }
+  requestAnimationFrame(() => { c.scrollLeft = c.scrollWidth; });
+}
+function revenirAujourdhuiRepas(){
+  dateRepasAffichee = aujourdhuiISO();
+  listeRepasEtendue = false;
+  rendreRepas();
+}
+
 function rendreRepas(){
+  if(!dateRepasAffichee) dateRepasAffichee = aujourdhuiISO();
+  rendreSelecteurJourRepas();
+  const estAujourdhui = dateRepasAffichee===aujourdhuiISO();
   majCoach();
-  const duJour = tousRepas.filter(r => r.userId===userRepasAffiche && r.date===aujourdhuiISO());
+  const duJour = tousRepas.filter(r => r.userId===userRepasAffiche && r.date===dateRepasAffichee);
   const kcal = duJour.reduce((s,r)=>s+(r.kcal||0),0);
   const prot = duJour.reduce((s,r)=>s+(r.prot||0),0);
   const gluc = duJour.reduce((s,r)=>s+(r.gluc||0),0);
@@ -1619,10 +1677,16 @@ function rendreRepas(){
   document.getElementById("protJour").textContent = Math.round(prot) + (plan ? " / " + plan.prot : "");
   document.getElementById("glucJour").textContent = Math.round(gluc) + (plan ? " / " + plan.gluc : "");
   document.getElementById("lipJour").textContent = Math.round(lip) + (plan ? " / " + plan.lip : "");
-  let label = "aujourd'hui — " + (estMoi ? "toi" : (u ? u.prenom : ""));
+  const dObj = new Date(dateRepasAffichee+"T12:00:00");
+  const libelleJour = estAujourdhui ? "aujourd'hui" : (JOURS[dObj.getDay()]+" "+dObj.getDate()+" "+MOIS[dObj.getMonth()]);
+  let label = libelleJour + " — " + (estMoi ? "toi" : (u ? u.prenom : ""));
   if(plan){
-    const reste = plan.kcal - Math.round(kcal);
-    label += " · objectif " + plan.kcal + (reste >= 0 ? " · reste " + reste : " · dépassé de " + (-reste));
+    const diff = plan.kcal - Math.round(kcal);
+    if(estAujourdhui){
+      label += " · objectif " + plan.kcal + (diff >= 0 ? " · reste " + diff : " · dépassé de " + (-diff));
+    }else{
+      label += " · objectif " + plan.kcal + (diff >= 0 ? " · " + diff + " en dessous" : " · " + (-diff) + " au-dessus");
+    }
   }
   document.getElementById("labelJourRepas").textContent = label;
   const totalM = Math.max(prot+gluc+lip, 0.001);
@@ -1630,9 +1694,10 @@ function rendreRepas(){
     '<div style="width:'+(prot/totalM*100)+'%;background:var(--vert);"></div>'
     + '<div style="width:'+(gluc/totalM*100)+'%;background:var(--or);"></div>'
     + '<div style="width:'+(lip/totalM*100)+'%;background:var(--rose);"></div>';
-  document.getElementById("carteAjoutRepas").classList.toggle("hidden", !estMoi);
+  document.getElementById("carteAjoutRepas").classList.toggle("hidden", !(estMoi && estAujourdhui));
+  document.getElementById("noteHistorique").classList.toggle("hidden", !(estMoi && !estAujourdhui));
   const c = document.getElementById("listeRepas");
-  if(duJour.length===0){ c.innerHTML = '<div class="vide">Aucun repas aujourd\u2019hui</div>'; return; }
+  if(duJour.length===0){ c.innerHTML = '<div class="vide">Aucun repas '+(estAujourdhui ? "aujourd\u2019hui" : "ce jour-l\u00e0")+'</div>'; return; }
   c.innerHTML = "";
   const tries = duJour.sort((a,b)=>a.timestamp-b.timestamp);
   const LIMITE = 3;
@@ -2116,7 +2181,8 @@ function majCoach(){
   const carte = document.getElementById("coachNutrition");
   if(!carte || !moi) return;
   const estMoi = userRepasAffiche===moi.uid;
-  if(!estMoi || !moi.plan){ carte.classList.add("hidden"); return; }
+  const estAujourdhui = dateRepasAffichee===aujourdhuiISO();
+  if(!estMoi || !estAujourdhui || !moi.plan){ carte.classList.add("hidden"); return; }
   carte.classList.remove("hidden");
   const plan = moi.plan;
   const duJour = tousRepas.filter(r => r.userId===moi.uid && r.date===aujourdhuiISO());
