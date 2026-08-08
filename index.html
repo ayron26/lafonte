@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,500;0,700;0,900;1,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
@@ -149,36 +150,58 @@
 <!-- ═══════════ CONFIGURATION — À REMPLACER ═══════════ -->
 <script>
 // 1) Crée un nouveau projet sur console.firebase.google.com (ex: "lafonte-muscu")
-// 2) Active Firestore Database (mode production) — PAS BESOIN d'Authentication
-// 3) Colle ici la config de ton app web :
+// 2) Active Authentication > E-mail/mot de passe
+// 3) Active Firestore Database (mode production)
+// 4) Colle ici la config de ton app web :
 const firebaseConfig = {
-  apiKey: "TA_CLE_ICI",
-  authDomain: "TON_PROJET.firebaseapp.com",
-  projectId: "TON_PROJET",
-  storageBucket: "TON_PROJET.appspot.com",
-  messagingSenderId: "XXXX",
-  appId: "XXXX"
+  apiKey: "AIzaSyAJeWqvX2aoG-2kxJs_Yr6sYjlsegCiXNg",
+  authDomain: "lafonte-muscu.firebaseapp.com",
+  projectId: "lafonte-muscu",
+  storageBucket: "lafonte-muscu.firebasestorage.app",
+  messagingSenderId: "37478179131",
+  appId: "1:37478179131:web:2341ed54d34c22351ad71e"
 };
 // Optionnel (phase 2) : URL de la Cloud Function d'analyse photo IA. Laisser vide pour l'instant.
 const FONCTION_ANALYSE_URL = "";
 
-/* Règles Firestore (version SANS authentification) à coller dans l'onglet "Règles" :
+/* Règles Firestore à coller dans l'onglet "Règles" :
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }
-⚠️ Base ouverte : gardez le lien entre vous et pas d'infos sensibles dedans.
-On remettra une vraie authentification en phase 2.
 */
 </script>
 <!-- ═══════════════════════════════════════════════════ -->
 
+<!-- ── Écran connexion ── -->
+<div id="ecranConnexion">
+  <div class="boite">
+    <h1 class="marque">La <span>Fonte</span></h1>
+    <div class="devise">Charge · Mange · Progresse</div>
+    <div class="carte">
+      <label>E-mail</label>
+      <input type="email" id="email" class="champ" autocomplete="email">
+      <label>Mot de passe</label>
+      <input type="password" id="mdp" class="champ" autocomplete="current-password">
+      <div id="zonePrenom" class="hidden">
+        <label>Ton prénom</label>
+        <input type="text" id="prenom" class="champ" autocomplete="given-name">
+      </div>
+      <button class="btn btn-accent" id="btnConnexion" onclick="connexion()">Se connecter</button>
+      <div style="text-align:center; margin-top:12px;">
+        <button style="background:none;border:none;color:var(--gris);text-decoration:underline;font-size:13px;" onclick="basculerInscription()" id="lienInscription">Créer un compte</button>
+      </div>
+      <div id="erreurConnexion" style="color:var(--rose); font-size:13px; margin-top:10px; text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── App ── -->
-<div id="app">
+<div id="app" class="hidden">
   <div class="page">
     <div class="entete">
       <h1 class="marque">La <span>Fonte</span></h1>
@@ -383,10 +406,6 @@ On remettra une vraie authentification en phase 2.
     <!-- ═══ PROFIL ═══ -->
     <div id="onglet-profil" class="hidden">
       <div class="carte">
-        <div class="carte-titre">Utilisateur</div>
-        <div class="selecteur-user" id="selecteurUtilisateur" style="margin-bottom:0;"></div>
-      </div>
-      <div class="carte">
         <div class="carte-titre" id="profilNom">—</div>
         <div class="ligne-champs">
           <div><label>Sexe</label><select id="pSexe" class="champ"><option value="h">Homme</option><option value="f">Femme</option></select></div>
@@ -431,6 +450,7 @@ On remettra une vraie authentification en phase 2.
         <div class="carte-titre">Santé iPhone</div>
         <div class="sous-texte" style="line-height:1.5;">Les pas et calories actives pourront remonter automatiquement via l'app Raccourcis (guide à venir).</div>
       </div>
+      <button class="btn btn-contour" style="width:100%;" onclick="deconnexion()">Se déconnecter</button>
     </div>
   </div>
 
@@ -465,6 +485,7 @@ On remettra une vraie authentification en phase 2.
 <script>
 // ═══════════ INIT ═══════════
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.firestore();
 
 let moi = null;
@@ -472,6 +493,7 @@ let tousLesUsers = [];
 let mesSeances = [];
 let tousRepas = [];
 let routines = [];
+let modeInscription = false;
 let userRepasAffiche = null;
 let userProgresAffiche = null;
 let seanceEnCours = null;
@@ -499,60 +521,65 @@ function aujourdhuiISO(){ const d=new Date(); return d.getFullYear()+"-"+String(
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
 function echap(s){ const d=document.createElement("div"); d.textContent=s==null?"":String(s); return d.innerHTML; }
 
-// ═══════════ PROFILS FIXES (démarrage direct, sans écran de connexion) ═══════════
-const PROFILS_EQUIPE = { florian: "Florian", gaetan: "Gaétan", kevin: "Kevin" };
-
-function rendreSelecteurUtilisateur(){
-  const c = document.getElementById("selecteurUtilisateur");
-  if(!c) return;
-  c.innerHTML = "";
-  Object.entries(PROFILS_EQUIPE).forEach(([uid, prenom]) => {
-    const b = document.createElement("button");
-    b.textContent = prenom;
-    if(moi && moi.uid===uid) b.classList.add("actif");
-    b.onclick = () => {
-      if(moi && moi.uid===uid) return;
-      try{ localStorage.setItem("lafonte_uid", uid); }catch(e){}
-      location.reload();
-    };
-    c.appendChild(b);
-  });
+// ═══════════ AUTH ═══════════
+function basculerInscription(){
+  modeInscription = !modeInscription;
+  document.getElementById("zonePrenom").classList.toggle("hidden", !modeInscription);
+  document.getElementById("btnConnexion").textContent = modeInscription ? "Créer mon compte" : "Se connecter";
+  document.getElementById("lienInscription").textContent = modeInscription ? "J'ai déjà un compte" : "Créer un compte";
 }
 
-async function connecterProfil(uid, prenom){
-  moi = { uid: uid, prenom: prenom, objectifKcal: null, plan: null, favoris: [] };
-  userRepasAffiche = uid;
-  userProgresAffiche = uid;
-  document.getElementById("profilNom").textContent = prenom;
-  const auj = new Date();
-  document.getElementById("dateJour").textContent = JOURS[auj.getDay()] + " " + auj.getDate() + " " + MOIS[auj.getMonth()];
-  if(FONCTION_ANALYSE_URL) document.getElementById("btnAnalyseIA").classList.remove("hidden");
-  rendreSelecteurUtilisateur();
+async function connexion(){
+  const email = document.getElementById("email").value.trim();
+  const mdp = document.getElementById("mdp").value;
+  const err = document.getElementById("erreurConnexion");
+  err.textContent = "";
   try{
-    const ref = db.collection("users").doc(uid);
-    const existant = await ref.get();
-    if(existant.exists){
-      const d = existant.data();
-      moi.objectifKcal = d.objectifKcal || null;
-      moi.plan = d.plan || null;
-      moi.favoris = d.favoris || [];
+    if(modeInscription){
+      const prenom = document.getElementById("prenom").value.trim();
+      if(!prenom){ err.textContent = "Indique ton prénom"; return; }
+      const cred = await auth.createUserWithEmailAndPassword(email, mdp);
+      await db.collection("users").doc(cred.user.uid).set({ prenom: prenom, objectifKcal: null, plan: null, creeLe: Date.now() });
     }else{
-      await ref.set({ prenom: prenom, creeLe: Date.now() });
+      await auth.signInWithEmailAndPassword(email, mdp);
     }
-    demarrerEcoutes();
   }catch(e){
-    toast("⚠️ Firebase pas configuré : rien ne sera sauvegardé");
+    const codes = {
+      "auth/invalid-email":"E-mail invalide",
+      "auth/invalid-credential":"E-mail ou mot de passe incorrect",
+      "auth/wrong-password":"Mot de passe incorrect",
+      "auth/user-not-found":"Aucun compte avec cet e-mail",
+      "auth/email-already-in-use":"Un compte existe déjà avec cet e-mail",
+      "auth/weak-password":"Mot de passe trop court (6 caractères minimum)",
+      "auth/unauthorized-domain":"Domaine non autorisé : ajoute ayron26.github.io dans Authentication > Settings > Domaines autorisés",
+      "auth/operation-not-allowed":"Active E-mail/mot de passe dans Authentication > Sign-in method"
+    };
+    err.textContent = codes[e.code] || ("Erreur : " + e.message);
   }
-  remplirChampsPlan();
 }
 
-// Démarrage : dernier profil utilisé sur cet appareil, sinon Florian
-window.addEventListener("DOMContentLoaded", () => {
-  let uid = null;
-  try{ uid = localStorage.getItem("lafonte_uid"); }catch(e){}
-  if(!uid || !PROFILS_EQUIPE[uid]) uid = "florian";
-  try{ localStorage.setItem("lafonte_uid", uid); }catch(e){}
-  connecterProfil(uid, PROFILS_EQUIPE[uid]);
+function deconnexion(){ auth.signOut(); }
+
+auth.onAuthStateChanged(async (user) => {
+  if(user){
+    const doc = await db.collection("users").doc(user.uid).get();
+    const d = doc.exists ? doc.data() : { prenom: "Moi" };
+    moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [] };
+    userRepasAffiche = moi.uid;
+    userProgresAffiche = moi.uid;
+    document.getElementById("ecranConnexion").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    document.getElementById("profilNom").textContent = moi.prenom;
+    remplirChampsPlan();
+    const auj = new Date();
+    document.getElementById("dateJour").textContent = JOURS[auj.getDay()] + " " + auj.getDate() + " " + MOIS[auj.getMonth()];
+    if(FONCTION_ANALYSE_URL) document.getElementById("btnAnalyseIA").classList.remove("hidden");
+    demarrerEcoutes();
+  }else{
+    moi = null;
+    document.getElementById("ecranConnexion").classList.remove("hidden");
+    document.getElementById("app").classList.add("hidden");
+  }
 });
 
 // ═══════════ ÉCOUTES TEMPS RÉEL ═══════════
