@@ -238,6 +238,11 @@ service cloud.firestore {
         </div>
         <div class="carte" id="carteRecapSemaine"></div>
         <div class="carte">
+          <div class="carte-titre">Ta régularité 🗓️</div>
+          <div id="calendrierRegularite"></div>
+        </div>
+        <div class="carte" id="carteDefiMois"></div>
+        <div class="carte">
           <div class="carte-titre">Classement du mois 🏆</div>
           <div id="classementMois"><div class="vide">Pas encore de séances ce mois-ci</div></div>
         </div>
@@ -333,6 +338,7 @@ service cloud.firestore {
         <div id="coachReste" style="margin-bottom:12px;"></div>
         <div id="coachProchain" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:8px;"></div>
         <div id="coachConseil" style="font-size:13px; line-height:1.55; color:var(--gris); margin-bottom:14px;"></div>
+        <div id="coachSuggestions" class="hidden" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:14px;"></div>
         <div class="carte-titre" style="margin-bottom:8px;">💧 Hydratation <span id="eauLabel" class="sous-texte" style="text-transform:none;letter-spacing:0;"></span></div>
         <div class="barre-macros" id="barreEau" style="margin:0 0 10px;"></div>
         <div style="display:flex;gap:8px;">
@@ -409,6 +415,15 @@ service cloud.firestore {
         <div class="carte-titre">Historique</div>
         <div id="histoExo"><div class="vide">Choisis un exercice</div></div>
       </div>
+      <div class="carte">
+        <div class="carte-titre">Volume par groupe (semaine) 📊</div>
+        <div id="volumeGroupes"></div>
+      </div>
+      <div class="carte">
+        <div class="carte-titre">Qui soulève le plus ⚔️</div>
+        <select id="choixExoComparateur" class="champ" onchange="rendreComparateur()"></select>
+        <div id="comparateurExo"></div>
+      </div>
     </div>
 
     <!-- ═══ PROFIL ═══ -->
@@ -463,6 +478,32 @@ service cloud.firestore {
         </div>
       </div>
       <div class="carte">
+        <div class="carte-titre">Mensurations 📏</div>
+        <div class="ligne-champs">
+          <div><label>Bras (cm)</label><input type="number" id="mBras" class="champ" inputmode="decimal" step="0.5"></div>
+          <div><label>Taille (cm)</label><input type="number" id="mTaille" class="champ" inputmode="decimal" step="0.5"></div>
+        </div>
+        <div class="ligne-champs">
+          <div><label>Poitrine (cm)</label><input type="number" id="mPoitrine" class="champ" inputmode="decimal" step="0.5"></div>
+          <div><label>Cuisse (cm)</label><input type="number" id="mCuisse" class="champ" inputmode="decimal" step="0.5"></div>
+        </div>
+        <button class="btn btn-contour" style="width:100%;" onclick="enregistrerMensurations()">Enregistrer</button>
+        <div style="margin-top:12px;">
+          <select id="choixMensuration" class="champ" onchange="dessinerGraphMensuration()">
+            <option value="bras">Bras</option>
+            <option value="taille">Taille</option>
+            <option value="poitrine">Poitrine</option>
+            <option value="cuisse">Cuisse</option>
+          </select>
+          <canvas id="graphMensuration" height="160"></canvas>
+          <div id="dernieresMensurations" class="sous-texte" style="margin-top:8px;">Aucune donnée pour l'instant.</div>
+        </div>
+      </div>
+      <div class="carte">
+        <div class="carte-titre">Mes badges 🏆</div>
+        <div id="grilleBadges" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
+      </div>
+      <div class="carte">
         <div class="carte-titre">Photos de progression 📸 <span class="sous-texte" style="text-transform:none;letter-spacing:0;">visibles par l'équipe</span></div>
         <img id="apercuPhotoProgres" class="apercu-photo hidden">
         <div class="ligne-champs" style="margin-bottom:10px;">
@@ -471,6 +512,13 @@ service cloud.firestore {
         </div>
         <input type="file" id="inputPhotoProgres" accept="image/*" capture="environment" class="hidden" onchange="chargerPhotoProgres(event)">
         <div class="grille-photos" id="mesPhotosProgres"><div class="vide">Ajoute ta première photo pour démarrer le suivi visuel.</div></div>
+        <div id="zoneComparateur" class="hidden" style="margin-top:12px; border-top:1px solid var(--ligne); padding-top:12px;">
+          <div class="ligne-champs">
+            <div><label>Avant</label><select id="photoAvant" class="champ"></select></div>
+            <div><label>Après</label><select id="photoApres" class="champ"></select></div>
+          </div>
+          <button class="btn btn-contour" style="width:100%;" onclick="comparerMesPhotos()">🔀 Comparer</button>
+        </div>
       </div>
       <div class="carte">
         <div class="carte-titre">Alertes 🔔</div>
@@ -505,6 +553,22 @@ service cloud.firestore {
       <button class="btn btn-contour" onclick="fermerPhotoProgres()">Fermer</button>
       <button class="btn btn-contour btn-petit hidden" id="btnSupprPhotoProgres" style="color:var(--rose); border-color:var(--rose);">Supprimer</button>
     </div>
+  </div>
+
+  <!-- Voile comparateur avant/après -->
+  <div id="voileComparateur" class="voile hidden">
+    <div class="etiquette">Avant / Après</div>
+    <div style="display:flex; gap:8px; width:100%; max-width:420px;">
+      <div style="flex:1; text-align:center;">
+        <img id="imgCompareAvant" style="width:100%; border-radius:14px; object-fit:cover; aspect-ratio:3/4;">
+        <div class="sous-texte" id="dateCompareAvant" style="margin-top:6px;"></div>
+      </div>
+      <div style="flex:1; text-align:center;">
+        <img id="imgCompareApres" style="width:100%; border-radius:14px; object-fit:cover; aspect-ratio:3/4;">
+        <div class="sous-texte" id="dateCompareApres" style="margin-top:6px;"></div>
+      </div>
+    </div>
+    <button class="btn btn-contour" onclick="fermerComparateur()">Fermer</button>
   </div>
 
   <!-- Voile scanner code-barres -->
@@ -548,6 +612,7 @@ let userRepasAffiche = null;
 let userProgresAffiche = null;
 let seanceEnCours = null;
 let routineActive = null;
+let prochainIdExo = 1;
 let intervalChrono = null;
 let intervalRepos = null;
 let reposRestant = 0;
@@ -565,6 +630,9 @@ let tousPoids = [];          // pesées de tout le monde
 let graphPoids = null;
 let tousPhotosProgres = [];  // photos de progression de toute l'équipe
 let photoProgresB64 = null;
+let tousMensurations = [];
+let graphMensuration = null;
+let defiMois = null;
 const appDemarreLe = Date.now(); // pour ne pas notifier sur l'historique au chargement
 let swReg = null;
 let intervalRappels = null;
@@ -650,7 +718,16 @@ function demarrerEcoutes(){
     tousLesUsers = snap.docs.map(d => ({ uid: d.id, prenom: d.data().prenom, plan: d.data().plan || null }));
     rendreSelecteursUsers();
     rendreSelecteurEquipe();
+    rendreDefiMois();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
+  });
+  db.collection("mensurations").onSnapshot(snap => {
+    tousMensurations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dessinerGraphMensuration();
+  });
+  db.collection("defis").doc(moisCourant()).onSnapshot(doc => {
+    defiMois = doc.exists ? doc.data() : null;
+    rendreDefiMois();
   });
   db.collection("routines").onSnapshot(snap => {
     routines = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -672,11 +749,12 @@ function demarrerEcoutes(){
       }
     });
     rendreFil(); rendreMesSeances(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement(); rendreRecapSemaine();
+    rendreVolumeGroupes(); rendreChoixExoComparateur(); rendreCalendrierRegularite(); rendreBadges(); rendreDefiMois();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("repas").orderBy("timestamp","desc").limit(120).onSnapshot(snap => {
     tousRepas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    rendreFil(); rendreRepas(); rendreStats(); rendreRecents(); rendreRecapSemaine();
+    rendreFil(); rendreRepas(); rendreStats(); rendreRecents(); rendreRecapSemaine(); rendreBadges();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("poids").onSnapshot(snap => {
@@ -720,7 +798,7 @@ function rendreSelecteursUsers(){
     });
   };
   faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; rendreSelecteursUsers(); rendreRepas(); });
-  faire("selecteurUserProgres", userProgresAffiche, (uid)=>{ userProgresAffiche=uid; rendreSelecteursUsers(); rendreChoixExos(); afficherProgression(); });
+  faire("selecteurUserProgres", userProgresAffiche, (uid)=>{ userProgresAffiche=uid; rendreSelecteursUsers(); rendreChoixExos(); afficherProgression(); rendreVolumeGroupes(); });
 }
 
 // ═══════════ FIL ═══════════
@@ -862,7 +940,7 @@ function dernierePerfExo(nom){
 
 function construireExo(nom, seriesCible){
   const perf = dernierePerfExo(nom);
-  const exo = { nom: nom, series: [], suggestion: null, dernierePerf: null };
+  const exo = { id: prochainIdExo++, nom: nom, series: [], suggestion: null, dernierePerf: null };
   if(perf){
     exo.dernierePerf = perf.map(x => x.reps+"×"+x.poids+"kg").join(" · ");
     const repsCible = seriesCible && seriesCible.length
@@ -888,10 +966,12 @@ function construireExo(nom, seriesCible){
 function demarrerSeance(routine){
   routineActive = routine || null;
   seanceEnCours = { debut: Date.now(), exos: [] };
+  prochainIdExo = 1;
   if(routine){
     const sel = document.getElementById("typeSeance");
     if(routine.type && [...sel.options].some(o => o.value===routine.type)) sel.value = routine.type;
     (routine.exos||[]).forEach(t => seanceEnCours.exos.push(construireExo(t.nom, t.series)));
+    detecterEtLierSupersets();
   }
   document.getElementById("seanceAccueil").classList.add("hidden");
   document.getElementById("seanceEnCours").classList.remove("hidden");
@@ -909,6 +989,33 @@ function ajouterExo(){
   if(!nom) return;
   champ.value = "";
   seanceEnCours.exos.push(construireExo(nom, null));
+  detecterEtLierSupersets();
+  rendreExos();
+}
+
+// Détecte automatiquement si la séance mêle exactement 2 groupes musculaires
+// (ex: Épaules + Trapèze, ou Dos + Bras) et lie les exercices en superset,
+// en respectant ton programme sans rien à faire manuellement.
+function detecterEtLierSupersets(){
+  const candidats = seanceEnCours.exos.filter(e => !e.supersetPartner && groupeDe(e.nom)!=="Abdos" && groupeDe(e.nom)!=="Autre");
+  const groupes = [...new Set(candidats.map(e => groupeDe(e.nom)))];
+  if(groupes.length !== 2) return;
+  const [gA, gB] = groupes;
+  const listeA = candidats.filter(e => groupeDe(e.nom)===gA);
+  const listeB = candidats.filter(e => groupeDe(e.nom)===gB);
+  const n = Math.min(listeA.length, listeB.length);
+  for(let i=0; i<n; i++){
+    listeA[i].supersetRole = "A"; listeA[i].supersetPartner = listeB[i].id;
+    listeB[i].supersetRole = "B"; listeB[i].supersetPartner = listeA[i].id;
+  }
+}
+
+function delierSuperset(id){
+  const a = seanceEnCours.exos.find(e => e.id===id);
+  if(!a) return;
+  const b = seanceEnCours.exos.find(e => e.id===a.supersetPartner);
+  delete a.supersetRole; delete a.supersetPartner;
+  if(b){ delete b.supersetRole; delete b.supersetPartner; }
   rendreExos();
 }
 
@@ -921,6 +1028,12 @@ function rendreExos(){
     let html = '<div class="nom-exo">'+echap(exo.nom)+'</div>';
     if(exo.dernierePerf) html += '<div class="derniere-perf">Dernière fois : '+echap(exo.dernierePerf)+'</div>';
     if(exo.suggestion) html += '<div class="badge-sugg">'+echap(exo.suggestion)+'</div>';
+    if(exo.supersetPartner){
+      const partenaire = seanceEnCours.exos.find(e => e.id===exo.supersetPartner);
+      html += '<div class="badge-sugg" style="color:var(--accent);background:rgba(255,107,26,.13);">🔗 Superset avec '+echap(partenaire ? partenaire.nom : "?")+' <button style="background:none;border:none;color:var(--gris);text-decoration:underline;padding:0 0 0 4px;" onclick="delierSuperset('+exo.id+')">délier</button></div>';
+    }
+    html += '<button class="mini-btn" style="margin-bottom:9px;" onclick="toggleEchauffement('+ie+')">🔥 Échauffement suggéré</button>';
+    html += '<div id="echauf-'+ie+'" class="sous-texte hidden" style="margin-bottom:9px; line-height:1.5;"></div>';
     exo.series.forEach((s, is) => {
       html += '<div class="ligne-serie'+(s.fait ? ' faite' : '')+'"><span class="num">S'+(is+1)+'</span>'
         + '<div class="stepper"><button onclick="pasSerie('+ie+','+is+',\u0027reps\u0027,-1)">−</button>'
@@ -937,6 +1050,21 @@ function rendreExos(){
     bloc.innerHTML = html;
     c.appendChild(bloc);
   });
+}
+
+function toggleEchauffement(ie){
+  const div = document.getElementById("echauf-"+ie);
+  if(!div) return;
+  if(div.classList.contains("hidden")){
+    const exo = seanceEnCours.exos[ie];
+    const cible = Number((exo.series.find(s => Number(s.poids) > 0) || {}).poids) || 0;
+    if(!cible){ toast("Renseigne d'abord un poids sur une série"); return; }
+    const paliers = [[0.5,10],[0.7,6],[0.85,3]];
+    div.innerHTML = paliers.map(([f,r]) => r+"×"+(Math.round(cible*f/2.5)*2.5)+"kg").join(" · ") + " → puis "+cible+" kg de travail";
+    div.classList.remove("hidden");
+  }else{
+    div.classList.add("hidden");
+  }
 }
 
 function majSerie(ie, is, champ, val){ seanceEnCours.exos[ie].series[is][champ] = val; }
@@ -968,7 +1096,14 @@ function cocherSerie(ie, is){
   if(!s.fait && !serieValide(s)){ toast("Règle les reps et les kg (0 kg = poids du corps)"); return; }
   s.fait = !s.fait;
   rendreExos();
-  if(s.fait) demarrerRepos(ie, is);
+  if(!s.fait) return;
+  const exo = seanceEnCours.exos[ie];
+  if(exo.supersetRole==="A"){
+    const partenaire = seanceEnCours.exos.find(e => e.id===exo.supersetPartner);
+    toast("💪 Enchaîne direct avec "+(partenaire ? partenaire.nom : "l'exercice lié")+" — pas de repos");
+  }else{
+    demarrerRepos(ie, is);
+  }
 }
 
 // ── Repos plein écran ──
@@ -1751,9 +1886,14 @@ function afficherProfilMembre(uid){
   const photosMembre = tousPhotosProgres.filter(p => p.userId===uid);
   html += '<div class="carte"><div class="carte-titre">Photos de progression 📸</div><div class="grille-photos" id="photosMembre">'
     + (photosMembre.length===0 ? '<div class="vide">Aucune photo pour l\u2019instant</div>' : '')
-    + '</div></div>';
+    + '</div>'
+    + (photosMembre.length>=2 ? '<div style="margin-top:12px;border-top:1px solid var(--ligne);padding-top:12px;">'
+      + '<div class="ligne-champs"><div><label>Avant</label><select id="photoAvantMembre" class="champ"></select></div><div><label>Après</label><select id="photoApresMembre" class="champ"></select></div></div>'
+      + '<button class="btn btn-contour" style="width:100%;" onclick="comparerPhotosMembre(\u0027'+uid+'\u0027)">🔀 Comparer</button></div>' : '')
+    + '</div>';
   c.innerHTML = html;
   rendrePhotosGrille(document.getElementById("photosMembre"), photosMembre, uid===moi.uid);
+  if(photosMembre.length>=2) remplirSelectsPhotos("photoAvantMembre", "photoApresMembre", photosMembre);
   const lr = document.getElementById("listeRepasMembre");
   repasJour.forEach(r => {
     const div = document.createElement("div");
@@ -1838,8 +1978,54 @@ function rendrePhotosProgres(){
   const c = document.getElementById("mesPhotosProgres");
   if(!c || !moi) return;
   const miennes = tousPhotosProgres.filter(p => p.userId===moi.uid);
-  if(miennes.length===0){ c.innerHTML = '<div class="vide">Ajoute ta première photo pour démarrer le suivi visuel.</div>'; return; }
+  const zone = document.getElementById("zoneComparateur");
+  if(miennes.length===0){ c.innerHTML = '<div class="vide">Ajoute ta première photo pour démarrer le suivi visuel.</div>'; if(zone) zone.classList.add("hidden"); return; }
   rendrePhotosGrille(c, miennes, true);
+  if(zone){
+    if(miennes.length>=2){
+      zone.classList.remove("hidden");
+      remplirSelectsPhotos("photoAvant", "photoApres", miennes);
+    }else{
+      zone.classList.add("hidden");
+    }
+  }
+}
+
+// ═══ COMPARATEUR AVANT / APRÈS ═══
+function remplirSelectsPhotos(idAvant, idApres, photos){
+  const tri = photos.slice().sort((a,b) => a.timestamp-b.timestamp);
+  const options = tri.map(p => {
+    const d = new Date(p.timestamp);
+    return '<option value="'+p.id+'">'+d.getDate()+' '+MOIS[d.getMonth()]+' '+d.getFullYear()+'</option>';
+  }).join("");
+  const selA = document.getElementById(idAvant);
+  const selB = document.getElementById(idApres);
+  if(selA){ selA.innerHTML = options; selA.selectedIndex = 0; }
+  if(selB){ selB.innerHTML = options; selB.selectedIndex = tri.length-1; }
+}
+
+function comparerPhotosDe(photos, idAvant, idApres){
+  const idA = document.getElementById(idAvant).value;
+  const idB = document.getElementById(idApres).value;
+  if(!idA || !idB || idA===idB){ toast("Choisis deux photos différentes"); return; }
+  const a = photos.find(p => p.id===idA);
+  const b = photos.find(p => p.id===idB);
+  if(!a || !b) return;
+  document.getElementById("imgCompareAvant").src = a.photo;
+  document.getElementById("imgCompareApres").src = b.photo;
+  const da = new Date(a.timestamp), db = new Date(b.timestamp);
+  document.getElementById("dateCompareAvant").textContent = da.getDate()+" "+MOIS[da.getMonth()]+" "+da.getFullYear();
+  document.getElementById("dateCompareApres").textContent = db.getDate()+" "+MOIS[db.getMonth()]+" "+db.getFullYear();
+  document.getElementById("voileComparateur").classList.remove("hidden");
+}
+function comparerMesPhotos(){
+  comparerPhotosDe(tousPhotosProgres.filter(p => p.userId===moi.uid), "photoAvant", "photoApres");
+}
+function comparerPhotosMembre(uid){
+  comparerPhotosDe(tousPhotosProgres.filter(p => p.userId===uid), "photoAvantMembre", "photoApresMembre");
+}
+function fermerComparateur(){
+  document.getElementById("voileComparateur").classList.add("hidden");
 }
 
 function voirPhotoProgres(url, id, avecSuppression, prenom){
@@ -1930,6 +2116,15 @@ function majCoach(){
   else if(reste <= 0 && plan.phase !== "masse") conseil = "💡 Objectif atteint : si tu as encore faim, privilégie légumes, bouillons et boissons sans calories.";
   else conseil = "💡 Répartis tes protéines : vise ~"+Math.max(20, Math.round(plan.prot/4/5)*5)+" g par repas pour optimiser la construction musculaire.";
   zoneConseil.textContent = conseil;
+
+  const zoneSuggestions = document.getElementById("coachSuggestions");
+  const suggestions = suggestionsRepas(reste, pR);
+  if(suggestions.length){
+    zoneSuggestions.innerHTML = "🍽️ Idées pour ton prochain repas : " + suggestions.map(s => "<b>"+echap(s.nom)+"</b> (~"+s.kcal+" kcal)").join(" · ");
+    zoneSuggestions.classList.remove("hidden");
+  }else{
+    zoneSuggestions.classList.add("hidden");
+  }
 
   // Hydratation : ~35 ml/kg, +500 ml jour de séance
   const objectifEau = Math.round((plan.poids*35 + (seanceAuj ? 500 : 0))/50)*50;
@@ -2197,6 +2392,226 @@ function verifierRappelsCoach(){
       }
     }
   }
+}
+
+// ═══════════ MENSURATIONS ═══════════
+async function enregistrerMensurations(){
+  const champs = { bras:"mBras", taille:"mTaille", poitrine:"mPoitrine", cuisse:"mCuisse" };
+  const data = {};
+  let rempli = false;
+  for(const [cle, id] of Object.entries(champs)){
+    const v = Number(document.getElementById(id).value);
+    if(v > 0){ data[cle] = v; rempli = true; }
+  }
+  if(!rempli){ toast("Remplis au moins une mensuration"); return; }
+  await db.collection("mensurations").doc(moi.uid + "_" + aujourdhuiISO()).set({
+    userId: moi.uid, prenom: moi.prenom, date: aujourdhuiISO(), timestamp: Date.now(), ...data
+  }, { merge: true });
+  ["mBras","mTaille","mPoitrine","mCuisse"].forEach(id => document.getElementById(id).value = "");
+  toast("Mensurations enregistrées 📏");
+}
+
+function dessinerGraphMensuration(){
+  const canvas = document.getElementById("graphMensuration");
+  if(!canvas || !moi) return;
+  const type = document.getElementById("choixMensuration").value;
+  const miennes = tousMensurations.filter(m => m.userId===moi.uid && m[type]!=null).sort((a,b)=>a.timestamp-b.timestamp);
+  const zone = document.getElementById("dernieresMensurations");
+  if(graphMensuration){ graphMensuration.destroy(); graphMensuration = null; }
+  if(miennes.length===0){ zone.textContent = "Aucune donnée pour cette mesure."; return; }
+  const derniers = miennes.slice(-14);
+  graphMensuration = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: derniers.map(m => { const d = new Date(m.timestamp); return d.getDate()+" "+MOIS[d.getMonth()]; }),
+      datasets: [{ data: derniers.map(m => m[type]), borderColor: "#4CC38A", backgroundColor: "rgba(76,195,138,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#4CC38A" }]
+    },
+    options: { plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#8E939B",font:{size:10}},grid:{color:"#1F2126"}}, y:{ticks:{color:"#8E939B"},grid:{color:"#1F2126"}} } }
+  });
+  const dernier = miennes[miennes.length-1];
+  const dd = new Date(dernier.timestamp);
+  zone.textContent = "Dernière mesure : "+dernier[type]+" cm ("+dd.getDate()+" "+MOIS[dd.getMonth()]+")";
+}
+
+// ═══════════ VOLUME PAR GROUPE MUSCULAIRE ═══════════
+const GROUPES_EXO = {
+  "developpe couche":"Pecs","developpe incline halteres":"Pecs","developpe couche machine":"Pecs","butterfly (pec deck)":"Pecs","dips":"Pecs",
+  "squat":"Jambes","presse a cuisses":"Jambes","leg curl":"Jambes","leg extension":"Jambes","fentes":"Jambes","mollets debout":"Jambes",
+  "hip thrust (fessier)":"Fessier","hip thrust":"Fessier",
+  "souleve de terre":"Dos","rowing barre":"Dos","tractions":"Dos","tirage vertical":"Dos",
+  "developpe militaire":"Épaules","elevations laterales":"Épaules","elevations frontales":"Épaules","oiseau halteres (arriere d'epaule)":"Épaules","face pull (arriere d'epaule)":"Épaules",
+  "shrugs halteres":"Trapèze",
+  "curl biceps":"Bras","curl marteau (brachial)":"Bras","extension triceps poulie":"Bras","barre au front":"Bras",
+  "crunchs":"Abdos","gainage":"Abdos","releves de jambes":"Abdos","russian twist (obliques)":"Abdos"
+};
+function groupeDe(nomExo){
+  const n = normaliser(nomExo);
+  for(const [cle, groupe] of Object.entries(GROUPES_EXO)){
+    if(n.includes(normaliser(cle)) || normaliser(cle).includes(n)) return groupe;
+  }
+  return "Autre";
+}
+function calculerVolumeParGroupe(uid){
+  const debutSemaine = new Date();
+  debutSemaine.setDate(debutSemaine.getDate() - ((debutSemaine.getDay()+6)%7));
+  debutSemaine.setHours(0,0,0,0);
+  const compte = {};
+  mesSeances.filter(s => s.userId===uid && s.timestamp>=debutSemaine.getTime()).forEach(s => {
+    (s.exos||[]).forEach(e => { const g = groupeDe(e.nom); compte[g] = (compte[g]||0) + (e.series||[]).length; });
+  });
+  return compte;
+}
+function rendreVolumeGroupes(){
+  const c = document.getElementById("volumeGroupes");
+  if(!c || !moi) return;
+  const uid = userProgresAffiche || moi.uid;
+  const compte = calculerVolumeParGroupe(uid);
+  const ordre = ["Pecs","Dos","Épaules","Trapèze","Jambes","Fessier","Bras","Abdos"];
+  const max = Math.max(20, ...ordre.map(g => compte[g]||0));
+  c.innerHTML = ordre.map(g => {
+    const n = compte[g]||0;
+    const pct = Math.min(100, n/max*100);
+    const note = n>0 && n<10 ? ' ⚠️' : '';
+    return '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;"><span>'+g+'</span><span>'+n+' séries'+note+'</span></div><div class="barre-macros" style="margin:0;"><div style="width:'+pct+'%;background:var(--accent);"></div></div></div>';
+  }).join("") + '<div class="sous-texte" style="margin-top:4px;">⚠️ = sous les ~10 séries/semaine généralement recommandées</div>';
+}
+
+// ═══════════ COMPARATEUR D'EXERCICE ═══════════
+function rendreChoixExoComparateur(){
+  const sel = document.getElementById("choixExoComparateur");
+  if(!sel) return;
+  const actuel = sel.value;
+  const noms = new Set();
+  mesSeances.forEach(s => (s.exos||[]).forEach(e => noms.add(e.nom)));
+  sel.innerHTML = "";
+  [...noms].sort().forEach(n => { const o = document.createElement("option"); o.textContent = n; sel.appendChild(o); });
+  if(actuel && noms.has(actuel)) sel.value = actuel;
+  rendreComparateur();
+}
+function rendreComparateur(){
+  const c = document.getElementById("comparateurExo");
+  if(!c || !moi) return;
+  const exo = document.getElementById("choixExoComparateur").value;
+  if(!exo){ c.innerHTML = '<div class="vide">Aucun exercice enregistré</div>'; return; }
+  const maxParUser = {};
+  mesSeances.forEach(s => {
+    const e = (s.exos||[]).find(x => x.nom===exo);
+    if(!e) return;
+    const mx = Math.max(...e.series.map(x => x.poids||0));
+    if(!maxParUser[s.userId] || mx>maxParUser[s.userId]) maxParUser[s.userId] = mx;
+  });
+  const classement = tousLesUsers.map(u => ({ prenom: (u.uid===moi.uid?"Toi":u.prenom), max: maxParUser[u.uid]||0 })).filter(x => x.max>0).sort((a,b)=>b.max-a.max);
+  if(classement.length===0){ c.innerHTML = '<div class="vide">Personne n\u2019a encore fait cet exercice</div>'; return; }
+  const medailles = ["🥇","🥈","🥉"];
+  c.innerHTML = classement.map((r,i) =>
+    '<div style="display:flex;justify-content:space-between;padding:7px 0;'+(i<classement.length-1?'border-bottom:1px solid var(--ligne);':'')+'"><span>'+(medailles[i]||(i+1)+".")+' '+echap(r.prenom)+'</span><b>'+r.max+' kg</b></div>'
+  ).join("");
+}
+
+// ═══════════ CALENDRIER DE RÉGULARITÉ ═══════════
+function rendreCalendrierRegularite(){
+  const c = document.getElementById("calendrierRegularite");
+  if(!c || !moi) return;
+  const compte = {};
+  mesSeances.filter(s => s.userId===moi.uid).forEach(s => { compte[s.date] = (compte[s.date]||0)+1; });
+  const cellules = [];
+  for(let i=55; i>=0; i--){
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const iso = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    cellules.push(compte[iso]||0);
+  }
+  c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + cellules.map(n => {
+    const couleur = n===0 ? "var(--carte2)" : (n===1 ? "rgba(255,107,26,.5)" : "var(--accent)");
+    return '<div style="aspect-ratio:1;border-radius:3px;background:'+couleur+';"></div>';
+  }).join("") + '</div><div class="sous-texte" style="margin-top:6px;">8 dernières semaines</div>';
+}
+
+// ═══════════ BADGES & JALONS ═══════════
+const BADGES = [
+  { emoji:"🥉", nom:"10 séances", test:(c)=>c.nbSeances>=10 },
+  { emoji:"🥈", nom:"50 séances", test:(c)=>c.nbSeances>=50 },
+  { emoji:"🥇", nom:"100 séances", test:(c)=>c.nbSeances>=100 },
+  { emoji:"🏆", nom:"5 records battus", test:(c)=>c.nbRecords>=5 },
+  { emoji:"👑", nom:"20 records battus", test:(c)=>c.nbRecords>=20 },
+  { emoji:"💪", nom:"100 kg au développé couché", test:(c)=>(c.maxParExo[normaliser("Développé couché")]||0)>=100 },
+  { emoji:"🦵", nom:"140 kg au squat", test:(c)=>(c.maxParExo[normaliser("Squat")]||0)>=140 },
+  { emoji:"🔥", nom:"180 kg au soulevé de terre", test:(c)=>(c.maxParExo[normaliser("Soulevé de terre")]||0)>=180 },
+  { emoji:"📆", nom:"30 jours de repas suivis", test:(c)=>c.joursRepasUniques>=30 }
+];
+function contexteBadges(){
+  const mesS = mesSeances.filter(s => s.userId===moi.uid);
+  const nbRecords = mesS.reduce((s,x) => s+((x.records||[]).length), 0);
+  const maxParExo = {};
+  mesS.forEach(s => (s.exos||[]).forEach(e => {
+    const cle = normaliser(e.nom);
+    const mx = Math.max(...e.series.map(x => x.poids||0));
+    if(!maxParExo[cle] || mx>maxParExo[cle]) maxParExo[cle] = mx;
+  }));
+  const joursRepasUniques = new Set(tousRepas.filter(r => r.userId===moi.uid).map(r => r.date)).size;
+  return { nbSeances: mesS.length, nbRecords, maxParExo, joursRepasUniques };
+}
+function rendreBadges(){
+  const c = document.getElementById("grilleBadges");
+  if(!c || !moi) return;
+  const ctx = contexteBadges();
+  c.innerHTML = "";
+  BADGES.forEach(b => {
+    const debloque = b.test(ctx);
+    const item = document.createElement("div");
+    item.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:3px;width:66px;" + (debloque ? "" : "opacity:.32;filter:grayscale(1);");
+    item.innerHTML = '<div style="font-size:28px;">'+b.emoji+'</div><div style="font-size:10px;text-align:center;color:var(--gris);line-height:1.2;">'+echap(b.nom)+'</div>';
+    c.appendChild(item);
+  });
+}
+
+// ═══════════ DÉFI DU MOIS ═══════════
+function moisCourant(){ const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function rendreDefiMois(){
+  const c = document.getElementById("carteDefiMois");
+  if(!c || !moi) return;
+  if(!defiMois){
+    c.innerHTML = '<div class="carte-titre">Défi du mois 🥊</div><div class="sous-texte" style="margin-bottom:10px;">Aucun défi actif. Lance-en un pour toute l\u2019équipe.</div>'
+      + '<div class="ligne-champs"><div><input type="number" id="cibleDefi" class="champ" inputmode="numeric" placeholder="Ex : 12 séances" style="margin-bottom:0;"></div>'
+      + '<button class="btn btn-accent btn-petit" style="width:auto;" onclick="lancerDefiMois()">Lancer</button></div>';
+    return;
+  }
+  const debutMois = new Date(); debutMois.setDate(1); debutMois.setHours(0,0,0,0);
+  const rows = tousLesUsers.map(u => {
+    const n = mesSeances.filter(s => s.userId===u.uid && s.timestamp>=debutMois.getTime()).length;
+    const pct = Math.min(100, Math.round(n/defiMois.cible*100));
+    const atteint = n>=defiMois.cible;
+    return '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;"><span style="font-weight:600;">'+(u.uid===moi.uid?"Toi":echap(u.prenom))+(atteint?' 🏆':'')+'</span><span class="sous-texte">'+n+'/'+defiMois.cible+'</span></div><div class="barre-macros" style="margin:0;"><div style="width:'+pct+'%;background:'+(atteint?'var(--vert)':'var(--accent)')+';"></div></div></div>';
+  }).join("");
+  c.innerHTML = '<div class="carte-titre">Défi du mois 🥊</div><div class="sous-texte" style="margin-bottom:10px;">'+defiMois.cible+' séances ce mois-ci pour tout le monde</div>' + rows;
+}
+async function lancerDefiMois(){
+  const cible = Number(document.getElementById("cibleDefi").value);
+  if(!cible || cible<1){ toast("Indique un objectif valide"); return; }
+  await db.collection("defis").doc(moisCourant()).set({ cible: cible, type:"seances", creePar: moi.uid, creeLe: Date.now() });
+  toast("Défi lancé 🥊");
+}
+
+// ═══════════ SUGGESTIONS DE REPAS ═══════════
+const IDEES_REPAS = [
+  { nom:"Poulet + riz + brocolis", kcal:550, prot:50, gluc:55, lip:12 },
+  { nom:"Omelette 3 œufs + pain complet", kcal:420, prot:26, gluc:30, lip:22 },
+  { nom:"Skyr + flocons d'avoine + banane", kcal:380, prot:30, gluc:55, lip:5 },
+  { nom:"Steak haché 5% + patate douce", kcal:480, prot:45, gluc:35, lip:10 },
+  { nom:"Saumon + quinoa + légumes", kcal:520, prot:38, gluc:35, lip:22 },
+  { nom:"Shaker whey + fruit", kcal:200, prot:28, gluc:20, lip:3 },
+  { nom:"Salade thon + pâtes complètes", kcal:460, prot:35, gluc:50, lip:10 },
+  { nom:"Tofu + riz + légumes sautés", kcal:430, prot:24, gluc:50, lip:14 },
+  { nom:"Fromage blanc 0% + amandes + miel", kcal:260, prot:18, gluc:20, lip:10 },
+  { nom:"Jambon blanc + pain + fromage", kcal:350, prot:24, gluc:32, lip:14 },
+  { nom:"Lentilles + riz + légumes", kcal:400, prot:20, gluc:60, lip:6 },
+  { nom:"Blanc de poulet + pâtes + huile d'olive", kcal:500, prot:48, gluc:48, lip:14 }
+];
+function suggestionsRepas(reste, prot){
+  if(reste <= 100) return [];
+  const candidats = IDEES_REPAS.filter(i => i.kcal <= reste+120);
+  if(candidats.length===0) return [];
+  candidats.sort((a,b) => (Math.abs(a.kcal-reste)+Math.abs(a.prot-prot)*2) - (Math.abs(b.kcal-reste)+Math.abs(b.prot-prot)*2));
+  return candidats.slice(0,2);
 }
 </script>
 </body>
