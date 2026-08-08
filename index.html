@@ -320,33 +320,6 @@ service cloud.firestore {
     <!-- ═══ REPAS ═══ -->
     <div id="onglet-repas">
       <div class="selecteur-user" id="selecteurUserRepas"></div>
-      <div class="carte">
-        <div class="total-kcal">
-          <div class="gros"><span id="kcalJour">0</span> <small>kcal</small></div>
-          <div class="sous-texte" id="labelJourRepas">aujourd'hui</div>
-          <div class="barre-macros" id="barreMacros"></div>
-          <div class="legende-macros">
-            <span style="color:var(--vert);">● Prot <b id="protJour">0</b> g</span>
-            <span style="color:var(--or);">● Gluc <b id="glucJour">0</b> g</span>
-            <span style="color:var(--rose);">● Lip <b id="lipJour">0</b> g</span>
-          </div>
-        </div>
-        <div id="listeRepas"><div class="vide">Aucun repas aujourd'hui</div></div>
-      </div>
-
-      <div class="carte hidden" id="coachNutrition">
-        <div class="carte-titre">Coach nutrition</div>
-        <div id="coachReste" style="margin-bottom:12px;"></div>
-        <div id="coachProchain" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:8px;"></div>
-        <div id="coachConseil" style="font-size:13px; line-height:1.55; color:var(--gris); margin-bottom:14px;"></div>
-        <div id="coachSuggestions" class="hidden" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:14px;"></div>
-        <div class="carte-titre" style="margin-bottom:8px;">💧 Hydratation <span id="eauLabel" class="sous-texte" style="text-transform:none;letter-spacing:0;"></span></div>
-        <div class="barre-macros" id="barreEau" style="margin:0 0 10px;"></div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-contour btn-petit" style="flex:1;" onclick="boireEau(250)">+ 1 verre (250 ml)</button>
-          <button class="btn btn-contour btn-petit" style="flex:1;" onclick="boireEau(500)">+ 500 ml</button>
-        </div>
-      </div>
 
       <div class="carte" id="carteAjoutRepas">
         <div class="carte-titre">Ajouter un repas</div>
@@ -398,6 +371,34 @@ service cloud.firestore {
             <div><label>Lip (g)</label><input type="number" id="lipRepas" class="champ" inputmode="numeric"></div>
           </div>
           <button class="btn btn-accent" onclick="enregistrerRepasManuel()">Enregistrer le repas</button>
+        </div>
+      </div>
+
+      <div class="carte">
+        <div class="total-kcal">
+          <div class="gros"><span id="kcalJour">0</span> <small>kcal</small></div>
+          <div class="sous-texte" id="labelJourRepas">aujourd'hui</div>
+          <div class="barre-macros" id="barreMacros"></div>
+          <div class="legende-macros">
+            <span style="color:var(--vert);">● Prot <b id="protJour">0</b> g</span>
+            <span style="color:var(--or);">● Gluc <b id="glucJour">0</b> g</span>
+            <span style="color:var(--rose);">● Lip <b id="lipJour">0</b> g</span>
+          </div>
+        </div>
+        <div id="listeRepas"><div class="vide">Aucun repas aujourd'hui</div></div>
+      </div>
+
+      <div class="carte hidden" id="coachNutrition">
+        <div class="carte-titre">Coach nutrition</div>
+        <div id="coachReste" style="margin-bottom:12px;"></div>
+        <div id="coachProchain" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:8px;"></div>
+        <div id="coachConseil" style="font-size:13px; line-height:1.55; color:var(--gris); margin-bottom:14px;"></div>
+        <div id="coachSuggestions" class="hidden" style="font-size:13px; line-height:1.55; background:var(--carte2); border-radius:12px; padding:11px 13px; margin-bottom:14px;"></div>
+        <div class="carte-titre" style="margin-bottom:8px;">💧 Hydratation <span id="eauLabel" class="sous-texte" style="text-transform:none;letter-spacing:0;"></span></div>
+        <div class="barre-macros" id="barreEau" style="margin:0 0 10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-contour btn-petit" style="flex:1;" onclick="boireEau(250)">+ 1 verre (250 ml)</button>
+          <button class="btn btn-contour btn-petit" style="flex:1;" onclick="boireEau(500)">+ 500 ml</button>
         </div>
       </div>
     </div>
@@ -632,6 +633,7 @@ let tousRepas = [];
 let routines = [];
 let modeInscription = false;
 let userRepasAffiche = null;
+let listeRepasEtendue = false;
 let userProgresAffiche = null;
 let seanceEnCours = null;
 let routineActive = null;
@@ -820,7 +822,7 @@ function rendreSelecteursUsers(){
       c.appendChild(b);
     });
   };
-  faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; rendreSelecteursUsers(); rendreRepas(); });
+  faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; listeRepasEtendue=false; rendreSelecteursUsers(); rendreRepas(); });
   faire("selecteurUserProgres", userProgresAffiche, (uid)=>{ userProgresAffiche=uid; rendreSelecteursUsers(); rendreChoixExos(); afficherProgression(); rendreVolumeGroupes(); });
 }
 
@@ -1632,7 +1634,10 @@ function rendreRepas(){
   const c = document.getElementById("listeRepas");
   if(duJour.length===0){ c.innerHTML = '<div class="vide">Aucun repas aujourd\u2019hui</div>'; return; }
   c.innerHTML = "";
-  duJour.sort((a,b)=>a.timestamp-b.timestamp).forEach(r => {
+  const tries = duJour.sort((a,b)=>a.timestamp-b.timestamp);
+  const LIMITE = 3;
+  const aAfficher = listeRepasEtendue ? tries : tries.slice(0, LIMITE);
+  aAfficher.forEach(r => {
     const div = document.createElement("div");
     div.className = "item-repas";
     div.innerHTML = (r.photo ? '<img src="'+r.photo+'">' : '<div class="sans-photo">🍽️</div>')
@@ -1642,6 +1647,14 @@ function rendreRepas(){
       + (estMoi ? '<button class="suppr" onclick="supprimerRepas(\u0027'+r.id+'\u0027)">✕</button>' : '');
     c.appendChild(div);
   });
+  if(tries.length > LIMITE){
+    const btn = document.createElement("button");
+    btn.className = "mini-btn";
+    btn.style.marginTop = "8px";
+    btn.textContent = listeRepasEtendue ? "Voir moins" : "Voir plus ("+(tries.length-LIMITE)+")";
+    btn.onclick = () => { listeRepasEtendue = !listeRepasEtendue; rendreRepas(); };
+    c.appendChild(btn);
+  }
 }
 
 // ═══════════ PROGRÈS ═══════════
