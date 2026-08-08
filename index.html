@@ -79,6 +79,9 @@
   .item-fil .quand{font-size:11px; color:var(--gris); white-space:nowrap;}
   .item-fil .detail{font-size:13px; margin-top:8px; background:var(--carte2); border-radius:12px; padding:10px 12px; display:none; line-height:1.6;}
   .item-fil.ouvert .detail{display:block;}
+  .reactions-fil{display:flex; gap:6px; margin-top:7px; flex-wrap:wrap;}
+  .reactions-fil button{background:var(--carte2); border:1px solid var(--ligne); border-radius:999px; padding:4px 9px; font-size:13px; color:var(--gris); line-height:1.3;}
+  .reactions-fil button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,107,26,.12);}
 
   /* ── Séance / mode salle ── */
   .chrono{font-family:'Archivo'; font-style:italic; font-weight:900; font-size:38px; text-align:center; letter-spacing:.01em;}
@@ -229,6 +232,7 @@ service cloud.firestore {
             </div>
           </div>
         </div>
+        <div class="carte" id="carteRecapSemaine"></div>
         <div class="carte">
           <div class="carte-titre">Classement du mois 🏆</div>
           <div id="classementMois"><div class="vide">Pas encore de séances ce mois-ci</div></div>
@@ -445,6 +449,20 @@ service cloud.firestore {
         </div>
         <canvas id="graphPoids" height="180" style="margin-top:12px;"></canvas>
         <div id="analysePoids" style="font-size:13px; line-height:1.55; margin-top:10px;"></div>
+        <div style="border-top:1px solid var(--ligne); margin-top:14px; padding-top:14px;">
+          <label>Objectif de poids 🎯</label>
+          <div class="ligne-champs">
+            <div><input type="number" id="poidsVise" class="champ" inputmode="decimal" step="0.1" placeholder="Poids visé (kg)"></div>
+            <div><input type="date" id="dateVisee" class="champ"></div>
+          </div>
+          <button class="btn btn-contour btn-petit" style="width:100%;" onclick="enregistrerObjectifPoids()">Définir la trajectoire</button>
+        </div>
+      </div>
+      <div class="carte">
+        <div class="carte-titre">Alertes 🔔</div>
+        <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Rappel d'eau, rappel de repas, et alerte quand un cousin termine une séance ou bat un record. Fonctionne pendant que l'app est ouverte ou récemment ouverte — pas si le téléphone est verrouillé depuis longtemps.</div>
+        <button class="btn btn-contour" style="width:100%;" onclick="demanderPermissionNotif()">Activer les alertes</button>
+        <div id="etatNotif" class="sous-texte" style="text-align:center; margin-top:8px;"></div>
       </div>
       <div class="carte">
         <div class="carte-titre">Santé iPhone</div>
@@ -521,9 +539,17 @@ let eauDocs = [];            // hydratation de tout le monde
 let eauMl = 0;               // mon eau du jour (ml)
 let tousPoids = [];          // pesées de tout le monde
 let graphPoids = null;
+const appDemarreLe = Date.now(); // pour ne pas notifier sur l'historique au chargement
+let swReg = null;
+let intervalRappels = null;
+const REACTIONS_DISPO = ["💪","🔥","👏","😮"];
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
 const MOIS = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").then(reg => { swReg = reg; }).catch(() => {});
+}
 
 function aujourdhuiISO(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2500); }
@@ -572,7 +598,7 @@ auth.onAuthStateChanged(async (user) => {
   if(user){
     const doc = await db.collection("users").doc(user.uid).get();
     const d = doc.exists ? doc.data() : { prenom: "Moi" };
-    moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [] };
+    moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [], objectifPoids: d.objectifPoids || null };
     userRepasAffiche = moi.uid;
     userProgresAffiche = moi.uid;
     document.getElementById("ecranConnexion").classList.add("hidden");
@@ -583,8 +609,10 @@ auth.onAuthStateChanged(async (user) => {
     document.getElementById("dateJour").textContent = JOURS[auj.getDay()] + " " + auj.getDate() + " " + MOIS[auj.getMonth()];
     if(FONCTION_ANALYSE_URL) document.getElementById("btnAnalyseIA").classList.remove("hidden");
     demarrerEcoutes();
+    demarrerRappelsCoach();
   }else{
     moi = null;
+    clearInterval(intervalRappels);
     document.getElementById("ecranConnexion").classList.remove("hidden");
     document.getElementById("app").classList.add("hidden");
   }
@@ -604,17 +632,30 @@ function demarrerEcoutes(){
   });
   db.collection("seances").orderBy("timestamp","desc").limit(60).onSnapshot(snap => {
     mesSeances = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    rendreFil(); rendreMesSeances(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement();
+    snap.docChanges().forEach(ch => {
+      if(ch.type==="added"){
+        const s = ch.doc.data();
+        if(s.userId!==moi.uid && s.timestamp>appDemarreLe){
+          const auteur = (tousLesUsers.find(u=>u.uid===s.userId)||{}).prenom || "Un cousin";
+          if(s.records && s.records.length){
+            notifier("🏆 Nouveau record !", auteur+" a battu un record : "+s.records.join(", "));
+          }else{
+            notifier("🏋️ Séance terminée", auteur+" vient de finir une séance "+s.type);
+          }
+        }
+      }
+    });
+    rendreFil(); rendreMesSeances(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement(); rendreRecapSemaine();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("repas").orderBy("timestamp","desc").limit(120).onSnapshot(snap => {
     tousRepas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    rendreFil(); rendreRepas(); rendreStats(); rendreRecents();
+    rendreFil(); rendreRepas(); rendreStats(); rendreRecents(); rendreRecapSemaine();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("poids").onSnapshot(snap => {
     tousPoids = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    rendrePoids();
+    rendrePoids(); rendreRecapSemaine();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("eau").onSnapshot(snap => {
@@ -663,6 +704,30 @@ function tempsRelatif(ts){
   return "il y a " + j + " j";
 }
 
+// ═══════════ RÉACTIONS ═══════════
+function ligneReactions(collection, id, reactionsObj){
+  reactionsObj = reactionsObj || {};
+  const row = document.createElement("div");
+  row.className = "reactions-fil";
+  REACTIONS_DISPO.forEach(emoji => {
+    const arr = reactionsObj[emoji] || [];
+    const b = document.createElement("button");
+    b.textContent = emoji + (arr.length ? " " + arr.length : "");
+    if(moi && arr.includes(moi.uid)) b.classList.add("actif");
+    b.onclick = (ev) => { ev.stopPropagation(); reagir(collection, id, emoji, arr); };
+    row.appendChild(b);
+  });
+  return row;
+}
+function reagir(collection, id, emoji, arrActuel){
+  const dejaReagi = (arrActuel||[]).includes(moi.uid);
+  const maj = {};
+  maj["reactions." + emoji] = dejaReagi
+    ? firebase.firestore.FieldValue.arrayRemove(moi.uid)
+    : firebase.firestore.FieldValue.arrayUnion(moi.uid);
+  db.collection(collection).doc(id).update(maj).catch(() => {});
+}
+
 function rendreFil(){
   const items = [
     ...mesSeances.map(s => ({ type:"seance", ts:s.timestamp, data:s })),
@@ -697,6 +762,7 @@ function rendreFil(){
       + '<div class="quoi">'+quoi+'</div><div class="detail">'+detail+'</div></div>'
       + '<div class="quand">'+tempsRelatif(it.ts)+'</div>';
     div.onclick = () => div.classList.toggle("ouvert");
+    div.querySelector(".contenu").appendChild(ligneReactions(it.type==="seance" ? "seances" : "repas", it.data.id, it.data.reactions));
     c.appendChild(div);
   });
 }
@@ -1535,6 +1601,10 @@ function remplirChampsPlan(){
     document.getElementById("pPhase").value = p.phase;
   }
   afficherPlan();
+  if(moi.objectifPoids){
+    document.getElementById("poidsVise").value = moi.objectifPoids.kg;
+    document.getElementById("dateVisee").value = moi.objectifPoids.date;
+  }
 }
 
 async function genererRoutines(){
@@ -1669,6 +1739,7 @@ function afficherProfilMembre(uid){
       + '<div class="detail">'+detail+'</div></div>'
       + '<div class="quand">'+tempsRelatif(s.timestamp)+'</div>';
     div.onclick = () => div.classList.toggle("ouvert");
+    div.querySelector(".contenu").appendChild(ligneReactions("seances", s.id, s.reactions));
     ls.appendChild(div);
   });
 }
@@ -1845,15 +1916,51 @@ function rendrePoids(){
   if(graphPoids){ graphPoids.destroy(); graphPoids = null; }
   if(miens.length===0){ zone.innerHTML = '<span class="sous-texte">Pèse-toi 1×/semaine, le matin à jeun — je te dirai si ton plan doit être ajusté.</span>'; return; }
   const derniers = miens.slice(-14);
+  const labels = derniers.map(p => { const d = new Date(p.timestamp); return d.getDate()+" "+MOIS[d.getMonth()]; });
+  const datasets = [{ label:"Poids", data: derniers.map(p => p.kg), borderColor: "#4DA3FF", backgroundColor: "rgba(77,163,255,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#4DA3FF" }];
+
+  // Trajectoire vers l'objectif de poids, si défini
+  if(moi.objectifPoids && moi.objectifPoids.date){
+    const dateCible = new Date(moi.objectifPoids.date + "T12:00:00");
+    if(!isNaN(dateCible) && dateCible.getTime() > Date.now()){
+      labels.push(dateCible.getDate()+" "+MOIS[dateCible.getMonth()]);
+      const objData = new Array(labels.length).fill(null);
+      objData[derniers.length - 1] = derniers[derniers.length - 1].kg; // point de départ : dernière pesée
+      objData[labels.length - 1] = moi.objectifPoids.kg;               // point d'arrivée : objectif
+      datasets.push({ label:"Objectif", data: objData, borderColor:"#F2B84B", borderDash:[6,4], spanGaps:true, pointRadius:4, pointBackgroundColor:"#F2B84B", fill:false });
+      datasets[0].data = [...datasets[0].data, null]; // aligne la longueur avec le label ajouté
+    }
+  }
+
   graphPoids = new Chart(canvas, {
     type: "line",
-    data: {
-      labels: derniers.map(p => { const d = new Date(p.timestamp); return d.getDate()+" "+MOIS[d.getMonth()]; }),
-      datasets: [{ data: derniers.map(p => p.kg), borderColor: "#4DA3FF", backgroundColor: "rgba(77,163,255,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#4DA3FF" }]
-    },
-    options: { plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#8E939B",font:{size:10}},grid:{color:"#1F2126"}}, y:{ticks:{color:"#8E939B"},grid:{color:"#1F2126"}} } }
+    data: { labels: labels, datasets: datasets },
+    options: { plugins:{legend:{display: datasets.length>1}}, scales:{ x:{ticks:{color:"#8E939B",font:{size:10}},grid:{color:"#1F2126"}}, y:{ticks:{color:"#8E939B"},grid:{color:"#1F2126"}} } }
   });
-  zone.innerHTML = analysePoids(miens);
+  zone.innerHTML = analysePoids(miens) + texteObjectifPoids(miens);
+}
+
+async function enregistrerObjectifPoids(){
+  const kg = Number(document.getElementById("poidsVise").value);
+  const date = document.getElementById("dateVisee").value;
+  if(!kg || kg < 30 || kg > 300 || !date){ toast("Renseigne un poids visé et une date"); return; }
+  moi.objectifPoids = { kg: kg, date: date };
+  await db.collection("users").doc(moi.uid).update({ objectifPoids: moi.objectifPoids });
+  rendrePoids();
+  toast("Trajectoire définie 🎯");
+}
+
+function texteObjectifPoids(miens){
+  if(!moi.objectifPoids || !moi.objectifPoids.date) return "";
+  const dernier = miens[miens.length-1];
+  const dateCible = new Date(moi.objectifPoids.date + "T12:00:00");
+  const joursRestants = Math.round((dateCible - Date.now())/86400000);
+  if(isNaN(dateCible) ) return "";
+  if(joursRestants <= 0) return '<div class="sous-texte" style="margin-top:8px;">Date visée dépassée — redéfinis ton objectif si besoin.</div>';
+  const semainesRestantes = Math.max(joursRestants/7, 0.1);
+  const ecart = moi.objectifPoids.kg - dernier.kg;
+  const rythme = ecart / semainesRestantes;
+  return '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--ligne);">🎯 Objectif <b>'+moi.objectifPoids.kg.toString().replace(".",",")+' kg</b> le '+dateCible.getDate()+' '+MOIS[dateCible.getMonth()]+' ('+joursRestants+' j) → il te faut <b>'+(rythme>=0?"+":"−")+Math.abs(rythme).toFixed(2).replace(".",",")+' kg/sem</b>.</div>';
 }
 
 function analysePoids(miens){
@@ -1880,6 +1987,97 @@ function analysePoids(miens){
     else verdict = parSem > 0 ? "Ton poids monte doucement → retire ~100 kcal/jour si ce n'est pas voulu." : "Ton poids descend → ajoute ~100 kcal/jour si ce n'est pas voulu.";
   }
   return html + verdict;
+}
+
+// ═══════════ RÉCAP DE LA SEMAINE ═══════════
+function calculerRecapSemaine(){
+  const depuis = Date.now() - 7*86400000;
+  const mesSeancesSemaine = mesSeances.filter(s => s.userId===moi.uid && s.timestamp>=depuis);
+  const nbSeances = mesSeancesSemaine.length;
+  const nbRecords = mesSeancesSemaine.reduce((s,x) => s + ((x.records||[]).length), 0);
+  const mesRepasSemaine = tousRepas.filter(r => r.userId===moi.uid && r.timestamp>=depuis);
+  const parJour = {};
+  mesRepasSemaine.forEach(r => { parJour[r.date] = (parJour[r.date]||0) + (r.kcal||0); });
+  const jours = Object.keys(parJour);
+  const moyenneKcal = jours.length ? Math.round(jours.reduce((s,d)=>s+parJour[d],0)/jours.length) : null;
+  let joursOk = 0;
+  if(moi.plan) jours.forEach(d => { if(Math.abs(parJour[d]-moi.plan.kcal) <= 200) joursOk++; });
+  const poidsSemaine = tousPoids.filter(p => p.userId===moi.uid && p.timestamp>=depuis).sort((a,b)=>a.timestamp-b.timestamp);
+  const deltaPoids = poidsSemaine.length>=2 ? poidsSemaine[poidsSemaine.length-1].kg - poidsSemaine[0].kg : null;
+  return { nbSeances, nbRecords, moyenneKcal, joursOk, nbJours: jours.length, deltaPoids };
+}
+
+function rendreRecapSemaine(){
+  const c = document.getElementById("carteRecapSemaine");
+  if(!c || !moi) return;
+  const r = calculerRecapSemaine();
+  let html = '<div class="carte-titre">Ta semaine 🗓️</div>'
+    + '<div style="display:flex;text-align:center;margin-bottom:8px;">'
+    + '<div style="flex:1;"><div class="titre" style="font-size:24px;font-weight:900;">'+r.nbSeances+'</div><div class="sous-texte">séances</div></div>'
+    + '<div style="flex:1;border-left:1px solid var(--ligne);"><div class="titre" style="font-size:24px;font-weight:900;color:var(--or);">'+r.nbRecords+'</div><div class="sous-texte">record'+(r.nbRecords!==1?"s":"")+'</div></div>'
+    + '<div style="flex:1;border-left:1px solid var(--ligne);"><div class="titre" style="font-size:24px;font-weight:900;">'+(r.deltaPoids!=null ? (r.deltaPoids>=0?"+":"")+r.deltaPoids.toFixed(1).replace(".",",")+" kg" : "—")+'</div><div class="sous-texte">poids</div></div>'
+    + '</div>';
+  html += r.moyenneKcal!=null
+    ? '<div class="sous-texte">Moyenne '+r.moyenneKcal+' kcal/jour sur '+r.nbJours+' jour'+(r.nbJours>1?"s":"")+' suivi'+(r.nbJours>1?"s":"")+(moi.plan ? ' · objectif respecté '+r.joursOk+'/'+r.nbJours+' j' : '')+'</div>'
+    : '<div class="sous-texte">Ajoute des repas cette semaine pour voir ta moyenne.</div>';
+  c.innerHTML = html;
+}
+
+// ═══════════ NOTIFICATIONS / ALERTES ═══════════
+function notifier(titre, corps){
+  toast(titre + " — " + corps);
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  if(swReg && swReg.showNotification){
+    swReg.showNotification(titre, { body: corps, tag: titre });
+  }else if(typeof Notification === "function"){
+    try{ new Notification(titre, { body: corps }); }catch(e){}
+  }
+}
+
+async function demanderPermissionNotif(){
+  const zone = document.getElementById("etatNotif");
+  if(!("Notification" in window)){ zone.textContent = "Non supporté sur ce navigateur"; return; }
+  const perm = await Notification.requestPermission();
+  if(perm==="granted"){ zone.textContent = "✅ Activées"; toast("Alertes activées 🔔"); }
+  else{ zone.textContent = "❌ Refusées — active-les dans Réglages iPhone > Safari si tu changes d'avis"; }
+}
+
+function cleDedupe(type){ return "lafonte_rappel_" + type + "_" + aujourdhuiISO(); }
+function dejaNotifieAujourdhui(type){ try{ return localStorage.getItem(cleDedupe(type))==="1"; }catch(e){ return false; } }
+function marquerNotifieAujourdhui(type){ try{ localStorage.setItem(cleDedupe(type), "1"); }catch(e){} }
+
+function demarrerRappelsCoach(){
+  clearInterval(intervalRappels);
+  intervalRappels = setInterval(verifierRappelsCoach, 15*60*1000);
+}
+
+function verifierRappelsCoach(){
+  if(!moi || !moi.plan) return;
+  const mnt = new Date();
+  const h = mnt.getHours() + mnt.getMinutes()/60;
+
+  // Rappel d'eau : entre 14h et 20h, si moins de la moitié de l'objectif
+  if(h>=14 && h<=20 && !dejaNotifieAujourdhui("eau")){
+    const seanceAuj = mesSeances.some(s => s.userId===moi.uid && s.date===aujourdhuiISO());
+    const objectifEau = Math.round((moi.plan.poids*35 + (seanceAuj?500:0))/50)*50;
+    if(eauMl < objectifEau*0.5){
+      notifier("💧 Pense à boire", "Tu es à "+(eauMl/1000).toFixed(1).replace(".",",")+" L sur "+(objectifEau/1000).toFixed(1).replace(".",",")+" L visés.");
+      marquerNotifieAujourdhui("eau");
+    }
+  }
+
+  // Rappel repas : si 3h+ depuis le dernier repas et qu'il reste des calories
+  if(h>=12 && h<21.5 && !dejaNotifieAujourdhui("repas")){
+    const duJour = tousRepas.filter(r => r.userId===moi.uid && r.date===aujourdhuiISO());
+    const reste = moi.plan.kcal - duJour.reduce((s,r)=>s+(r.kcal||0),0);
+    if(reste > 0 && duJour.length){
+      const dernierTs = Math.max(...duJour.map(r => r.timestamp));
+      if((Date.now()-dernierTs)/3600000 >= 3){
+        notifier("🍽️ Prochain repas", "Il te reste "+Math.round(reste)+" kcal aujourd'hui.");
+        marquerNotifieAujourdhui("repas");
+      }
+    }
+  }
 }
 </script>
 </body>
