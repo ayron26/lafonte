@@ -1532,14 +1532,23 @@ async function analyserPhotoIA(){
       body: JSON.stringify({ image: photoRepasB64.split(",")[1], mediaType: photoRepasMedia })
     });
     const data = await rep.json();
+    if(!rep.ok || data.erreur){
+      toast("⚠️ "+(data.erreur || "Erreur serveur ("+rep.status+")"));
+      return;
+    }
+    const nombreDe = (v) => {
+      if(v==null || v==="") return 0;
+      const n = parseFloat(String(v).replace(",",".").replace(/[^0-9.\-]/g,""));
+      return isNaN(n) ? 0 : n;
+    };
     document.getElementById("nomRepas").value = data.nom || "";
-    document.getElementById("kcalRepas").value = Math.round(data.totalCalories||0);
-    document.getElementById("protRepas").value = Math.round(data.totalProteines||0);
-    document.getElementById("glucRepas").value = Math.round(data.totalGlucides||0);
-    document.getElementById("lipRepas").value = Math.round(data.totalLipides||0);
+    document.getElementById("kcalRepas").value = Math.round(nombreDe(data.totalCalories));
+    document.getElementById("protRepas").value = Math.round(nombreDe(data.totalProteines));
+    document.getElementById("glucRepas").value = Math.round(nombreDe(data.totalGlucides));
+    document.getElementById("lipRepas").value = Math.round(nombreDe(data.totalLipides));
     toast("Analyse terminée — vérifie et enregistre");
   }catch(e){
-    toast("Erreur d'analyse, saisis à la main");
+    toast("Erreur réseau : impossible de joindre le serveur d'analyse");
   }finally{
     btn.disabled = false; btn.textContent = "✨ Analyser (IA)";
   }
