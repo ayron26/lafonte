@@ -469,8 +469,16 @@ service cloud.firestore {
   <div id="voileScan" class="voile hidden">
     <div class="etiquette">Scanner</div>
     <video id="videoScan" playsinline muted></video>
-    <div class="sous-texte" id="etatScan" style="text-align:center;">Vise le code-barres du produit</div>
-    <button class="btn btn-contour" onclick="fermerScanner()">Fermer</button>
+    <div class="sous-texte" id="etatScan" style="text-align:center;">Reste à 15-20 cm du code (pas plus près) et stabilise</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-contour btn-petit" id="btnZoom" onclick="changerZoomScan()">🔍 Zoom 1×</button>
+      <button class="btn btn-contour btn-petit" onclick="basculerFlashScan()">🔦 Flash</button>
+      <button class="btn btn-contour btn-petit" onclick="fermerScanner()">Fermer</button>
+    </div>
+    <div style="display:flex; gap:8px; width:100%; max-width:400px;">
+      <input type="text" id="codeManuel" class="champ" inputmode="numeric" placeholder="Ou tape le code (13 chiffres)" style="margin-bottom:0;">
+      <button class="btn btn-accent btn-petit" style="width:auto;" onclick="validerCodeManuel()">OK</button>
+    </div>
   </div>
 
   <nav>
@@ -1005,22 +1013,80 @@ function changerModeAjout(mode){
 }
 
 // ── Scanner code-barres (caméra + OpenFoodFacts) ──
+let zoomScan = 1;
+let flashScan = false;
+
+function pisteVideoScan(){
+  const flux = document.getElementById("videoScan").srcObject;
+  return (flux && flux.getVideoTracks) ? (flux.getVideoTracks()[0] || null) : null;
+}
+
 function ouvrirScanner(){
   document.getElementById("voileScan").classList.remove("hidden");
-  document.getElementById("etatScan").textContent = "Vise le code-barres du produit";
+  document.getElementById("etatScan").textContent = "Reste à 15-20 cm du code (pas plus près) et stabilise";
+  zoomScan = 1; flashScan = false;
+  document.getElementById("btnZoom").textContent = "🔍 Zoom 1×";
   try{
-    lecteurCodeBarres = new ZXing.BrowserMultiFormatReader();
-    lecteurCodeBarres.decodeFromVideoDevice(null, document.getElementById("videoScan"), (resultat, erreur) => {
+    // Priorité aux formats alimentaires + mode "essaie plus fort" pour les petits codes
+    const indices = new Map();
+    indices.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128
+    ]);
+    indices.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    lecteurCodeBarres = new ZXing.BrowserMultiFormatReader(indices);
+    const auResultat = (resultat, erreur) => {
       if(resultat){
         const code = resultat.getText();
         fermerScanner();
         chargerProduitOFF(code);
       }
+    };
+    // Caméra arrière en haute résolution (aide beaucoup pour les petits codes)
+    const contraintes = { audio: false, video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } };
+    const video = document.getElementById("videoScan");
+    const demarrage = (typeof lecteurCodeBarres.decodeFromConstraints === "function")
+      ? lecteurCodeBarres.decodeFromConstraints(contraintes, video, auResultat)
+      : lecteurCodeBarres.decodeFromVideoDevice(null, video, auResultat);
+    Promise.resolve(demarrage).catch(() => {
+      document.getElementById("etatScan").textContent = "Caméra inaccessible : autorise-la pour ce site (AA dans la barre Safari > Réglages du site web), ou tape le code à la main ci-dessous.";
     });
   }catch(e){
-    document.getElementById("etatScan").textContent = "Caméra inaccessible. Vérifie les autorisations dans Réglages > Safari.";
+    document.getElementById("etatScan").textContent = "Caméra indisponible — tape le code-barres à la main ci-dessous.";
   }
 }
+
+function changerZoomScan(){
+  const piste = pisteVideoScan();
+  if(!piste || !piste.getCapabilities || !piste.getCapabilities().zoom){
+    toast("Zoom non géré ici — recule à 20 cm, ça fera la mise au point");
+    return;
+  }
+  const caps = piste.getCapabilities().zoom;
+  zoomScan = zoomScan >= 3 ? 1 : zoomScan + 1;
+  const valeur = Math.min(caps.max || 3, Math.max(caps.min || 1, zoomScan));
+  piste.applyConstraints({ advanced: [{ zoom: valeur }] }).catch(()=>{});
+  document.getElementById("btnZoom").textContent = "🔍 Zoom " + zoomScan + "×";
+}
+
+function basculerFlashScan(){
+  const piste = pisteVideoScan();
+  if(!piste || !piste.getCapabilities || !piste.getCapabilities().torch){
+    toast("Flash non géré ici — rapproche-toi d'une lumière");
+    return;
+  }
+  flashScan = !flashScan;
+  piste.applyConstraints({ advanced: [{ torch: flashScan }] }).catch(()=>{});
+}
+
+function validerCodeManuel(){
+  const code = document.getElementById("codeManuel").value.replace(/\D/g, "");
+  if(code.length < 8){ toast("Code trop court (8 ou 13 chiffres)"); return; }
+  document.getElementById("codeManuel").value = "";
+  fermerScanner();
+  chargerProduitOFF(code);
+}
+
 function fermerScanner(){
   if(lecteurCodeBarres){ try{ lecteurCodeBarres.reset(); }catch(e){} lecteurCodeBarres = null; }
   document.getElementById("voileScan").classList.add("hidden");
