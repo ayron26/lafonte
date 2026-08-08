@@ -1054,30 +1054,73 @@ async function chargerProduitOFF(code){
 }
 
 // ── Recherche par nom ──
+// Aliments de base intégrés [nom, kcal, prot, gluc, lip] pour 100 g
+// (les produits frais sans code-barres sont mal couverts par OpenFoodFacts)
+const ALIMENTS_BASE = [
+  // Fruits
+  ["Banane",89,1.1,20,0.3],["Pomme",52,0.3,12,0.2],["Orange",47,0.9,9,0.1],["Clémentine",47,0.8,9,0.2],
+  ["Fraises",33,0.7,6,0.3],["Framboises",52,1.2,5,0.7],["Myrtilles",57,0.7,12,0.3],["Cerises",63,1,13,0.2],
+  ["Raisin",69,0.6,16,0.2],["Kiwi",61,1.1,12,0.5],["Poire",57,0.4,12,0.1],["Pêche",39,0.9,8,0.3],
+  ["Abricot",48,1.4,9,0.4],["Ananas",50,0.5,12,0.1],["Mangue",60,0.8,14,0.4],["Melon",34,0.8,8,0.2],
+  ["Pastèque",30,0.6,7,0.2],["Avocat",160,2,2,15],
+  // Légumes
+  ["Brocoli",34,2.8,4,0.4],["Haricots verts",31,1.8,4,0.2],["Carotte",41,0.9,8,0.2],["Tomate",18,0.9,3,0.2],
+  ["Courgette",17,1.2,2,0.3],["Concombre",15,0.7,2,0.1],["Salade verte",15,1.4,1.5,0.2],["Épinards",23,2.9,1.4,0.4],
+  ["Champignons",22,3.1,2,0.3],["Poivron",26,1,5,0.3],["Chou-fleur",25,1.9,3,0.3],
+  ["Pomme de terre cuite",87,1.9,19,0.1],["Patate douce cuite",90,2,20,0.1],
+  // Féculents (cuits)
+  ["Riz blanc cuit",130,2.7,28,0.3],["Riz basmati cuit",135,2.8,29,0.4],["Pâtes cuites",150,5.5,29,1],
+  ["Pâtes complètes cuites",150,6,28,1.2],["Quinoa cuit",120,4.4,21,1.9],["Semoule cuite",112,3.8,23,0.2],
+  ["Lentilles cuites",116,9,17,0.4],["Pois chiches cuits",164,8.9,24,2.6],["Haricots rouges cuits",127,8.7,19,0.5],
+  ["Flocons d'avoine",370,13,59,7],["Pain complet",250,9,44,3],["Baguette",270,8.5,55,1.5],["Pain de mie",265,8,47,4],
+  // Viandes / poissons / œufs
+  ["Blanc de poulet cuit",165,31,0,3.6],["Escalope de dinde cuite",150,29,0,2],
+  ["Steak haché 5% cuit",150,26,0,5],["Steak haché 15% cuit",215,25,0,13],
+  ["Œuf entier",145,12.5,0.7,10],["Blanc d'œuf",48,10.5,0.7,0.2],
+  ["Saumon cuit",200,22,0,12],["Thon au naturel (boîte)",110,25,0,1],["Cabillaud cuit",100,23,0,1],
+  ["Crevettes",99,21,0.2,1],["Jambon blanc",110,20,0.5,3],["Tofu",120,12,2,7],
+  // Laitages
+  ["Skyr nature",57,10,3.8,0.2],["Fromage blanc 0%",45,7.5,4,0.1],["Yaourt nature",60,4,5,3],
+  ["Lait demi-écrémé",46,3.2,4.8,1.5],["Emmental",380,28,0,30],["Mozzarella",280,18,2,22],["Feta",270,14,2,23],
+  // Divers
+  ["Huile d'olive",900,0,0,100],["Beurre",750,0.7,0.6,83],["Amandes",620,21,9,54],["Noix",690,15,7,67],
+  ["Beurre de cacahuète",600,28,12,47],["Miel",320,0.3,80,0],["Chocolat noir 70%",570,8,34,42],
+  ["Whey protéine (poudre)",390,76,6.5,6]
+];
+function normaliser(t){ return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
+
 async function rechercherProduit(){
   const q = document.getElementById("champRecherche").value.trim();
   if(!q) return;
   const c = document.getElementById("resultatsRecherche");
   c.innerHTML = '<div class="vide">Recherche…</div>';
+  // 1) Aliments de base intégrés
+  const nq = normaliser(q);
+  const locaux = ALIMENTS_BASE
+    .filter(a => normaliser(a[0]).includes(nq))
+    .slice(0, 6)
+    .map(a => ({ nom: a[0], marque: "Aliment de base", per100: { kcal: a[1], prot: a[2], gluc: a[3], lip: a[4] } }));
+  // 2) Produits OpenFoodFacts (emballés, avec code-barres)
+  let produits = [];
   try{
     const rep = await fetch("https://world.openfoodfacts.org/cgi/search.pl?search_terms="+encodeURIComponent(q)+"&search_simple=1&action=process&json=1&page_size=8&fields=code,product_name,brands,nutriments");
     const data = await rep.json();
-    const produits = (data.products||[]).filter(p => p.product_name && p.nutriments && p.nutriments["energy-kcal_100g"]!=null);
-    if(produits.length===0){ c.innerHTML = '<div class="vide">Aucun résultat. Essaie un autre nom ou le mode manuel.</div>'; return; }
-    c.innerHTML = "";
-    produits.forEach(p => {
-      const div = document.createElement("div");
-      div.className = "resultat-recherche";
-      const n = extraireNutriments(p);
-      div.innerHTML = '<div style="min-width:0;"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+echap(p.product_name)+'</div>'
-        + '<div class="sous-texte">'+echap(p.brands||"")+'</div></div>'
-        + '<div style="font-family:\u0027Archivo\u0027;font-weight:800;white-space:nowrap;">'+Math.round(n.kcal)+' <span class="sous-texte">kcal/100g</span></div>';
-      div.onclick = () => afficherFicheProduit({ nom: p.product_name, marque: p.brands||"", per100: n });
-      c.appendChild(div);
-    });
-  }catch(e){
-    c.innerHTML = '<div class="vide">Erreur réseau, réessaie.</div>';
-  }
+    produits = (data.products||[])
+      .filter(p => p.product_name && p.nutriments && p.nutriments["energy-kcal_100g"]!=null)
+      .map(p => ({ nom: p.product_name, marque: p.brands||"", per100: extraireNutriments(p) }));
+  }catch(e){}
+  const tout = [...locaux, ...produits].slice(0, 12);
+  if(tout.length===0){ c.innerHTML = '<div class="vide">Aucun résultat. Essaie un autre nom ou le mode manuel.</div>'; return; }
+  c.innerHTML = "";
+  tout.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "resultat-recherche";
+    div.innerHTML = '<div style="min-width:0;"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+echap(p.nom)+'</div>'
+      + '<div class="sous-texte">'+(p.marque==="Aliment de base" ? '🥗 Aliment de base' : echap(p.marque))+'</div></div>'
+      + '<div style="font-family:\u0027Archivo\u0027;font-weight:800;white-space:nowrap;">'+Math.round(p.per100.kcal)+' <span class="sous-texte">kcal/100g</span></div>';
+    div.onclick = () => afficherFicheProduit(p);
+    c.appendChild(div);
+  });
 }
 
 // ── Fiche produit + quantité ──
