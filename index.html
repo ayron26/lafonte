@@ -219,6 +219,7 @@ service cloud.firestore {
     <div id="onglet-fil">
       <div class="selecteur-user" id="selecteurEquipe"></div>
       <div id="vueFil">
+        <div class="carte hidden" id="banniereAujourdhui" style="border:1.5px solid var(--accent);"></div>
         <div class="carte">
           <div class="carte-titre">Cette semaine</div>
           <div style="display:flex; text-align:center;">
@@ -428,109 +429,131 @@ service cloud.firestore {
 
     <!-- ═══ PROFIL ═══ -->
     <div id="onglet-profil" class="hidden">
-      <div class="carte">
-        <div class="carte-titre" id="profilNom">—</div>
-        <div class="ligne-champs">
-          <div><label>Sexe</label><select id="pSexe" class="champ"><option value="h">Homme</option><option value="f">Femme</option></select></div>
-          <div><label>Âge</label><input type="number" id="pAge" class="champ" inputmode="numeric"></div>
-        </div>
-        <div class="ligne-champs">
-          <div><label>Taille (cm)</label><input type="number" id="pTaille" class="champ" inputmode="numeric"></div>
-          <div><label>Poids (kg)</label><input type="number" id="pPoids" class="champ" inputmode="decimal"></div>
-        </div>
-        <label>Activité (hors muscu)</label>
-        <select id="pActivite" class="champ">
-          <option value="1.2">Sédentaire (bureau, peu de marche)</option>
-          <option value="1.375">Légèrement actif</option>
-          <option value="1.55" selected>Actif (travail physique, atelier)</option>
-          <option value="1.725">Très actif</option>
-        </select>
-        <label>Phase</label>
-        <select id="pPhase" class="champ">
-          <option value="masse">Prise de masse</option>
-          <option value="maintien" selected>Maintien musculaire</option>
-          <option value="seche">Sèche</option>
-          <option value="agressive">Sèche agressive</option>
-        </select>
-        <button class="btn btn-accent" onclick="calculerPlan()">Calculer mon plan</button>
-        <div id="resultatPlan" style="margin-top:12px;"></div>
+      <div class="modes-ajout" style="margin-bottom:14px;">
+        <button id="sousMoiPlan" class="actif" onclick="changerSousOngletMoi('plan')">🎯 Plan</button>
+        <button id="sousMoiCorps" onclick="changerSousOngletMoi('corps')">📈 Corps</button>
+        <button id="sousMoiBadges" onclick="changerSousOngletMoi('badges')">🏆 Badges</button>
+        <button id="sousMoiReglages" onclick="changerSousOngletMoi('reglages')">⚙️ Réglages</button>
       </div>
-      <div class="carte">
-        <div class="carte-titre">Mon planning semaine 📋</div>
-        <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Tes 5 séances perso : Lun épaules/trap/abdos · Mar dos/biceps · Mer pecs/triceps/abdos · Jeu jambes/fessier · Ven rappel épaules (arrière d'épaule). Règle du 4×12 : si la 12ᵉ rép passe encore avec de la force → le badge 🔥 te proposera de monter la charge.</div>
-        <button class="btn btn-contour" style="width:100%;" onclick="importerPlanningPerso()">Importer mes 5 routines</button>
-      </div>
-      <div class="carte">
-        <div class="carte-titre">Suivi du poids ⚖️</div>
-        <div style="display:flex; gap:8px; align-items:flex-end;">
-          <div style="flex:1;"><label>Poids du jour (kg)</label><input type="number" id="poidsJour" class="champ" inputmode="decimal" step="0.1" style="margin-bottom:0;"></div>
-          <button class="btn btn-accent btn-petit" style="width:auto;" onclick="enregistrerPoids()">OK</button>
-        </div>
-        <canvas id="graphPoids" height="180" style="margin-top:12px;"></canvas>
-        <div id="analysePoids" style="font-size:13px; line-height:1.55; margin-top:10px;"></div>
-        <div style="border-top:1px solid var(--ligne); margin-top:14px; padding-top:14px;">
-          <label>Objectif de poids 🎯</label>
+
+      <!-- ── Plan : identité + objectifs nutrition + programme perso ── -->
+      <div id="sousOngletPlan">
+        <div class="carte">
+          <div class="carte-titre" id="profilNom">—</div>
           <div class="ligne-champs">
-            <div><input type="number" id="poidsVise" class="champ" inputmode="decimal" step="0.1" placeholder="Poids visé (kg)"></div>
-            <div><input type="date" id="dateVisee" class="champ"></div>
+            <div><label>Sexe</label><select id="pSexe" class="champ"><option value="h">Homme</option><option value="f">Femme</option></select></div>
+            <div><label>Âge</label><input type="number" id="pAge" class="champ" inputmode="numeric"></div>
           </div>
-          <button class="btn btn-contour btn-petit" style="width:100%;" onclick="enregistrerObjectifPoids()">Définir la trajectoire</button>
-        </div>
-      </div>
-      <div class="carte">
-        <div class="carte-titre">Mensurations 📏</div>
-        <div class="ligne-champs">
-          <div><label>Bras (cm)</label><input type="number" id="mBras" class="champ" inputmode="decimal" step="0.5"></div>
-          <div><label>Taille (cm)</label><input type="number" id="mTaille" class="champ" inputmode="decimal" step="0.5"></div>
-        </div>
-        <div class="ligne-champs">
-          <div><label>Poitrine (cm)</label><input type="number" id="mPoitrine" class="champ" inputmode="decimal" step="0.5"></div>
-          <div><label>Cuisse (cm)</label><input type="number" id="mCuisse" class="champ" inputmode="decimal" step="0.5"></div>
-        </div>
-        <button class="btn btn-contour" style="width:100%;" onclick="enregistrerMensurations()">Enregistrer</button>
-        <div style="margin-top:12px;">
-          <select id="choixMensuration" class="champ" onchange="dessinerGraphMensuration()">
-            <option value="bras">Bras</option>
-            <option value="taille">Taille</option>
-            <option value="poitrine">Poitrine</option>
-            <option value="cuisse">Cuisse</option>
+          <div class="ligne-champs">
+            <div><label>Taille (cm)</label><input type="number" id="pTaille" class="champ" inputmode="numeric"></div>
+            <div><label>Poids (kg)</label><input type="number" id="pPoids" class="champ" inputmode="decimal"></div>
+          </div>
+          <label>Activité (hors muscu)</label>
+          <select id="pActivite" class="champ">
+            <option value="1.2">Sédentaire (bureau, peu de marche)</option>
+            <option value="1.375">Légèrement actif</option>
+            <option value="1.55" selected>Actif (travail physique, atelier)</option>
+            <option value="1.725">Très actif</option>
           </select>
-          <canvas id="graphMensuration" height="160"></canvas>
-          <div id="dernieresMensurations" class="sous-texte" style="margin-top:8px;">Aucune donnée pour l'instant.</div>
+          <label>Phase</label>
+          <select id="pPhase" class="champ">
+            <option value="masse">Prise de masse</option>
+            <option value="maintien" selected>Maintien musculaire</option>
+            <option value="seche">Sèche</option>
+            <option value="agressive">Sèche agressive</option>
+          </select>
+          <button class="btn btn-accent" onclick="calculerPlan()">Calculer mon plan</button>
+          <div id="resultatPlan" style="margin-top:12px;"></div>
+        </div>
+        <div class="carte">
+          <div class="carte-titre">Mon planning semaine 📋</div>
+          <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Tes 5 séances perso : Lun épaules/trap/abdos · Mar dos/biceps · Mer pecs/triceps/abdos · Jeu jambes/fessier · Ven rappel épaules (arrière d'épaule). Règle du 4×12 : si la 12ᵉ rép passe encore avec de la force → le badge 🔥 te proposera de monter la charge.</div>
+          <button class="btn btn-contour" style="width:100%;" onclick="importerPlanningPerso()">Importer mes 5 routines</button>
         </div>
       </div>
-      <div class="carte">
-        <div class="carte-titre">Mes badges 🏆</div>
-        <div id="grilleBadges" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
-      </div>
-      <div class="carte">
-        <div class="carte-titre">Photos de progression 📸 <span class="sous-texte" style="text-transform:none;letter-spacing:0;">visibles par l'équipe</span></div>
-        <img id="apercuPhotoProgres" class="apercu-photo hidden">
-        <div class="ligne-champs" style="margin-bottom:10px;">
-          <button class="btn btn-contour btn-petit" style="flex:1;" onclick="document.getElementById('inputPhotoProgres').click()">📷 Prendre une photo</button>
-          <button class="btn btn-accent btn-petit" style="flex:1;" onclick="ajouterPhotoProgres()">Ajouter</button>
-        </div>
-        <input type="file" id="inputPhotoProgres" accept="image/*" capture="environment" class="hidden" onchange="chargerPhotoProgres(event)">
-        <div class="grille-photos" id="mesPhotosProgres"><div class="vide">Ajoute ta première photo pour démarrer le suivi visuel.</div></div>
-        <div id="zoneComparateur" class="hidden" style="margin-top:12px; border-top:1px solid var(--ligne); padding-top:12px;">
-          <div class="ligne-champs">
-            <div><label>Avant</label><select id="photoAvant" class="champ"></select></div>
-            <div><label>Après</label><select id="photoApres" class="champ"></select></div>
+
+      <!-- ── Corps : poids + mensurations + photos ── -->
+      <div id="sousOngletCorps" class="hidden">
+        <div class="carte">
+          <div class="carte-titre">Suivi du poids ⚖️</div>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div style="flex:1;"><label>Poids du jour (kg)</label><input type="number" id="poidsJour" class="champ" inputmode="decimal" step="0.1" style="margin-bottom:0;"></div>
+            <button class="btn btn-accent btn-petit" style="width:auto;" onclick="enregistrerPoids()">OK</button>
           </div>
-          <button class="btn btn-contour" style="width:100%;" onclick="comparerMesPhotos()">🔀 Comparer</button>
+          <canvas id="graphPoids" height="180" style="margin-top:12px;"></canvas>
+          <div id="analysePoids" style="font-size:13px; line-height:1.55; margin-top:10px;"></div>
+          <div style="border-top:1px solid var(--ligne); margin-top:14px; padding-top:14px;">
+            <label>Objectif de poids 🎯</label>
+            <div class="ligne-champs">
+              <div><input type="number" id="poidsVise" class="champ" inputmode="decimal" step="0.1" placeholder="Poids visé (kg)"></div>
+              <div><input type="date" id="dateVisee" class="champ"></div>
+            </div>
+            <button class="btn btn-contour btn-petit" style="width:100%;" onclick="enregistrerObjectifPoids()">Définir la trajectoire</button>
+          </div>
+        </div>
+        <div class="carte">
+          <div class="carte-titre">Mensurations 📏</div>
+          <div class="ligne-champs">
+            <div><label>Bras (cm)</label><input type="number" id="mBras" class="champ" inputmode="decimal" step="0.5"></div>
+            <div><label>Taille (cm)</label><input type="number" id="mTaille" class="champ" inputmode="decimal" step="0.5"></div>
+          </div>
+          <div class="ligne-champs">
+            <div><label>Poitrine (cm)</label><input type="number" id="mPoitrine" class="champ" inputmode="decimal" step="0.5"></div>
+            <div><label>Cuisse (cm)</label><input type="number" id="mCuisse" class="champ" inputmode="decimal" step="0.5"></div>
+          </div>
+          <button class="btn btn-contour" style="width:100%;" onclick="enregistrerMensurations()">Enregistrer</button>
+          <div style="margin-top:12px;">
+            <select id="choixMensuration" class="champ" onchange="dessinerGraphMensuration()">
+              <option value="bras">Bras</option>
+              <option value="taille">Taille</option>
+              <option value="poitrine">Poitrine</option>
+              <option value="cuisse">Cuisse</option>
+            </select>
+            <canvas id="graphMensuration" height="160"></canvas>
+            <div id="dernieresMensurations" class="sous-texte" style="margin-top:8px;">Aucune donnée pour l'instant.</div>
+          </div>
+        </div>
+        <div class="carte">
+          <div class="carte-titre">Photos de progression 📸 <span class="sous-texte" style="text-transform:none;letter-spacing:0;">visibles par l'équipe</span></div>
+          <img id="apercuPhotoProgres" class="apercu-photo hidden">
+          <div class="ligne-champs" style="margin-bottom:10px;">
+            <button class="btn btn-contour btn-petit" style="flex:1;" onclick="document.getElementById('inputPhotoProgres').click()">📷 Prendre une photo</button>
+            <button class="btn btn-accent btn-petit" style="flex:1;" onclick="ajouterPhotoProgres()">Ajouter</button>
+          </div>
+          <input type="file" id="inputPhotoProgres" accept="image/*" capture="environment" class="hidden" onchange="chargerPhotoProgres(event)">
+          <div class="grille-photos" id="mesPhotosProgres"><div class="vide">Ajoute ta première photo pour démarrer le suivi visuel.</div></div>
+          <div id="zoneComparateur" class="hidden" style="margin-top:12px; border-top:1px solid var(--ligne); padding-top:12px;">
+            <div class="ligne-champs">
+              <div><label>Avant</label><select id="photoAvant" class="champ"></select></div>
+              <div><label>Après</label><select id="photoApres" class="champ"></select></div>
+            </div>
+            <button class="btn btn-contour" style="width:100%;" onclick="comparerMesPhotos()">🔀 Comparer</button>
+          </div>
         </div>
       </div>
-      <div class="carte">
-        <div class="carte-titre">Alertes 🔔</div>
-        <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Rappel d'eau, rappel de repas, et alerte quand un cousin termine une séance ou bat un record. Fonctionne pendant que l'app est ouverte ou récemment ouverte — pas si le téléphone est verrouillé depuis longtemps.</div>
-        <button class="btn btn-contour" style="width:100%;" onclick="demanderPermissionNotif()">Activer les alertes</button>
-        <div id="etatNotif" class="sous-texte" style="text-align:center; margin-top:8px;"></div>
+
+      <!-- ── Badges ── -->
+      <div id="sousOngletBadges" class="hidden">
+        <div class="carte">
+          <div class="carte-titre">Mes badges 🏆</div>
+          <div id="grilleBadges" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
+        </div>
       </div>
-      <div class="carte">
-        <div class="carte-titre">Santé iPhone</div>
-        <div class="sous-texte" style="line-height:1.5;">Les pas et calories actives pourront remonter automatiquement via l'app Raccourcis (guide à venir).</div>
+
+      <!-- ── Réglages ── -->
+      <div id="sousOngletReglages" class="hidden">
+        <div class="carte">
+          <div class="carte-titre">Alertes 🔔</div>
+          <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Rappel d'eau, rappel de repas, et alerte quand un cousin termine une séance ou bat un record. Fonctionne pendant que l'app est ouverte ou récemment ouverte — pas si le téléphone est verrouillé depuis longtemps.</div>
+          <button class="btn btn-contour" style="width:100%;" onclick="demanderPermissionNotif()">Activer les alertes</button>
+          <div id="etatNotif" class="sous-texte" style="text-align:center; margin-top:8px;"></div>
+        </div>
+        <div class="carte">
+          <div class="carte-titre">Santé iPhone</div>
+          <div class="sous-texte" style="line-height:1.5;">Les pas et calories actives pourront remonter automatiquement via l'app Raccourcis (guide à venir).</div>
+        </div>
+        <button class="btn btn-contour" style="width:100%;" onclick="deconnexion()">Se déconnecter</button>
       </div>
-      <button class="btn btn-contour" style="width:100%;" onclick="deconnexion()">Se déconnecter</button>
     </div>
   </div>
 
@@ -904,6 +927,7 @@ document.addEventListener("visibilitychange", () => {
 
 function rendreRoutines(){
   const c = document.getElementById("listeRoutines");
+  rendreBanniereAujourdhui();
   if(!c || !moi) return;
   const miennes = routines.filter(r => r.userId===moi.uid).sort((a,b) => (a.creeLe||0)-(b.creeLe||0));
   if(miennes.length===0){
@@ -2627,6 +2651,38 @@ function suggestionsRepas(reste, prot){
   if(candidats.length===0) return [];
   candidats.sort((a,b) => (Math.abs(a.kcal-reste)+Math.abs(a.prot-prot)*2) - (Math.abs(b.kcal-reste)+Math.abs(b.prot-prot)*2));
   return candidats.slice(0,2);
+}
+
+// ═══════════ SOUS-ONGLETS DE L'ONGLET MOI ═══════════
+function changerSousOngletMoi(nom){
+  ["plan","corps","badges","reglages"].forEach(n => {
+    document.getElementById("sousOnglet"+n.charAt(0).toUpperCase()+n.slice(1)).classList.toggle("hidden", n!==nom);
+    document.getElementById("sousMoi"+n.charAt(0).toUpperCase()+n.slice(1)).classList.toggle("actif", n===nom);
+  });
+}
+
+// ═══════════ BANNIÈRE "AUJOURD'HUI C'EST..." ═══════════
+function trouverRoutineDuJour(){
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+  const jourAuj = normaliser(jours[new Date().getDay()]);
+  return routines.find(r => r.userId===moi.uid && normaliser(r.nom).startsWith(jourAuj));
+}
+function rendreBanniereAujourdhui(){
+  const c = document.getElementById("banniereAujourdhui");
+  if(!c || !moi) return;
+  const r = trouverRoutineDuJour();
+  if(!r){ c.classList.add("hidden"); return; }
+  c.classList.remove("hidden");
+  c.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+    + '<div><div class="sous-texte" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent);">Aujourd\u2019hui</div>'
+    + '<div class="titre" style="font-size:17px;font-weight:800;margin-top:2px;">'+echap(r.nom)+'</div></div>'
+    + '<button class="btn btn-accent btn-petit" style="width:auto;flex-shrink:0;" onclick="demarrerAujourdhui()">Démarrer</button></div>';
+}
+function demarrerAujourdhui(){
+  const r = trouverRoutineDuJour();
+  if(!r) return;
+  allerOnglet("seance");
+  demarrerSeance(r);
 }
 </script>
 </body>
