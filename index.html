@@ -285,7 +285,8 @@ service cloud.firestore {
           <div id="listeRoutines"><div class="vide">Aucune routine pour l'instant.<br>Calcule ton plan dans l'onglet Moi pour générer un programme, ou fais une séance libre.</div></div>
         </div>
         <div class="carte" style="text-align:center;">
-          <button class="btn btn-accent" onclick="demarrerSeance()">Séance libre</button>
+          <button class="btn btn-accent" onclick="demarrerSeance()" style="margin-bottom:8px;">Séance libre</button>
+          <button class="btn btn-contour" style="width:100%;" onclick="ouvrirConstructeurRoutine()">📝 Créer mon programme</button>
         </div>
         <div class="carte">
           <div class="carte-titre">Tes dernières séances</div>
@@ -585,6 +586,32 @@ service cloud.firestore {
     </div>
   </div>
 
+  <!-- Voile constructeur de programme -->
+  <div id="voileConstructeur" class="voile hidden" style="align-items:stretch; justify-content:flex-start; overflow-y:auto; padding:calc(20px + env(safe-area-inset-top)) 16px 24px;">
+    <div class="etiquette" style="align-self:center; margin-bottom:6px;">Nouveau programme</div>
+    <div style="width:100%; max-width:460px; margin:0 auto;">
+      <label>Nom de la routine</label>
+      <input type="text" id="nomNouvelleRoutine" class="champ" placeholder="Ex : Lundi — Push, Jambes...">
+      <div class="sous-texte" style="margin:-6px 0 12px;">💡 Commence par un jour ("Lundi — ...") pour qu'elle s'affiche automatiquement le bon jour sur ton fil.</div>
+      <label>Type</label>
+      <select id="typeNouvelleRoutine" class="champ">
+        <option>Push (pecs / épaules / triceps)</option>
+        <option>Pull (dos / biceps)</option>
+        <option>Jambes</option>
+        <option>Full body</option>
+        <option>Haut du corps</option>
+        <option>Autre</option>
+      </select>
+      <div id="listeExosConstructeur"></div>
+      <input list="exosCommuns" id="nouvelExoConstructeur" class="champ" placeholder="Ajouter un exercice…">
+      <button class="mini-btn" onclick="ajouterExoConstructeur()">+ Ajouter cet exercice</button>
+      <div class="actions" style="margin-top:16px; justify-content:center;">
+        <button class="btn btn-contour" onclick="fermerConstructeurRoutine()">Annuler</button>
+        <button class="btn btn-accent" style="width:auto;" onclick="enregistrerRoutineConstruite()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Voile repos plein écran -->
   <div id="voileRepos" class="voile hidden">
     <div class="etiquette">Repos</div>
@@ -665,6 +692,7 @@ let dateRepasAffichee = null;
 let userProgresAffiche = null;
 let seanceEnCours = null;
 let routineActive = null;
+let routineEnConstruction = null;
 let prochainIdExo = 1;
 let intervalChrono = null;
 let intervalRepos = null;
@@ -956,6 +984,77 @@ function relacherEcran(){
 document.addEventListener("visibilitychange", () => {
   if(seanceEnCours && document.visibilityState==="visible") garderEcranAllume();
 });
+
+// ═══════════ CONSTRUCTEUR DE PROGRAMME PERSO ═══════════
+function ouvrirConstructeurRoutine(){
+  routineEnConstruction = { exos: [] };
+  document.getElementById("nomNouvelleRoutine").value = "";
+  document.getElementById("typeNouvelleRoutine").selectedIndex = 0;
+  rendreExosConstructeur();
+  document.getElementById("voileConstructeur").classList.remove("hidden");
+}
+function fermerConstructeurRoutine(){
+  document.getElementById("voileConstructeur").classList.add("hidden");
+  routineEnConstruction = null;
+}
+function ajouterExoConstructeur(){
+  const champ = document.getElementById("nouvelExoConstructeur");
+  const nom = champ.value.trim();
+  if(!nom) return;
+  champ.value = "";
+  routineEnConstruction.exos.push({ nom: nom, nbSeries: 4, reps: 12 });
+  rendreExosConstructeur();
+}
+function pasExoConstructeur(i, champ, delta){
+  const e = routineEnConstruction.exos[i];
+  e[champ] = Math.max(1, (Number(e[champ])||0) + delta);
+  rendreExosConstructeur();
+}
+function fixerExoConstructeur(i, champ, val){
+  routineEnConstruction.exos[i][champ] = Math.max(1, Number(val)||1);
+}
+function supprExoConstructeur(i){
+  routineEnConstruction.exos.splice(i,1);
+  rendreExosConstructeur();
+}
+function rendreExosConstructeur(){
+  const c = document.getElementById("listeExosConstructeur");
+  c.innerHTML = "";
+  routineEnConstruction.exos.forEach((e,i) => {
+    const bloc = document.createElement("div");
+    bloc.className = "bloc-exo";
+    bloc.innerHTML = '<div class="nom-exo">'+echap(e.nom)+'</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">'
+      + '<div class="stepper"><button onclick="pasExoConstructeur('+i+',\u0027nbSeries\u0027,-1)">−</button>'
+      + '<input type="number" value="'+e.nbSeries+'" onchange="fixerExoConstructeur('+i+',\u0027nbSeries\u0027,this.value)">'
+      + '<button onclick="pasExoConstructeur('+i+',\u0027nbSeries\u0027,1)">+</button></div>'
+      + '<span class="sous-texte">séries ×</span>'
+      + '<div class="stepper"><button onclick="pasExoConstructeur('+i+',\u0027reps\u0027,-1)">−</button>'
+      + '<input type="number" value="'+e.reps+'" onchange="fixerExoConstructeur('+i+',\u0027reps\u0027,this.value)">'
+      + '<button onclick="pasExoConstructeur('+i+',\u0027reps\u0027,1)">+</button></div>'
+      + '<span class="sous-texte">reps</span>'
+      + '<button class="suppr-serie" style="margin-left:auto;" onclick="supprExoConstructeur('+i+')">✕</button>'
+      + '</div>';
+    c.appendChild(bloc);
+  });
+}
+async function enregistrerRoutineConstruite(){
+  const nom = document.getElementById("nomNouvelleRoutine").value.trim();
+  if(!nom){ toast("Donne un nom à ta routine"); return; }
+  if(routineEnConstruction.exos.length===0){ toast("Ajoute au moins un exercice"); return; }
+  const type = document.getElementById("typeNouvelleRoutine").value;
+  const exos = routineEnConstruction.exos.map(e => ({
+    nom: e.nom,
+    series: Array.from({length: e.nbSeries}, () => ({ reps: e.reps, poids: "" }))
+  }));
+  await db.collection("routines").add({
+    userId: moi.uid, prenom: moi.prenom,
+    nom: nom, type: type, exos: exos,
+    genere: false, creeLe: Date.now()
+  });
+  toast("Routine \u00AB "+nom+" \u00BB créée 💪");
+  fermerConstructeurRoutine();
+}
 
 function rendreRoutines(){
   const c = document.getElementById("listeRoutines");
