@@ -778,6 +778,7 @@ function demarrerEcoutes(){
   db.collection("mensurations").onSnapshot(snap => {
     tousMensurations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     dessinerGraphMensuration();
+    if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
   db.collection("defis").doc(moisCourant()).onSnapshot(doc => {
     defiMois = doc.exists ? doc.data() : null;
@@ -2007,6 +2008,21 @@ function afficherProfilMembre(uid){
     + (photosMembre.length>=2 ? '<div style="margin-top:12px;border-top:1px solid var(--ligne);padding-top:12px;">'
       + '<div class="ligne-champs"><div><label>Avant</label><select id="photoAvantMembre" class="champ"></select></div><div><label>Après</label><select id="photoApresMembre" class="champ"></select></div></div>'
       + '<button class="btn btn-contour" style="width:100%;" onclick="comparerPhotosMembre(\u0027'+uid+'\u0027)">🔀 Comparer</button></div>' : '')
+    + '</div>';
+  const mensurationsMembre = ["bras","taille","poitrine","cuisse"].map(type => {
+    const liste = tousMensurations.filter(m => m.userId===uid && m[type]!=null).sort((a,b)=>a.timestamp-b.timestamp);
+    return { type, valeur: liste.length ? liste[liste.length-1][type] : null, date: liste.length ? liste[liste.length-1].timestamp : null };
+  });
+  const aUneMensuration = mensurationsMembre.some(m => m.valeur!=null);
+  const libellesMensu = { bras:"Bras", taille:"Taille", poitrine:"Poitrine", cuisse:"Cuisse" };
+  html += '<div class="carte"><div class="carte-titre">Mensurations 📏</div>'
+    + (aUneMensuration
+      ? '<div style="display:flex;flex-wrap:wrap;gap:10px;">' + mensurationsMembre.map(m =>
+          '<div style="flex:1;min-width:70px;text-align:center;background:var(--carte2);border-radius:12px;padding:10px 6px;">'
+          + '<div class="titre" style="font-size:18px;font-weight:900;">'+(m.valeur!=null ? m.valeur.toString().replace(".",",")+' cm' : "—")+'</div>'
+          + '<div class="sous-texte">'+libellesMensu[m.type]+'</div></div>'
+        ).join("") + '</div>'
+      : '<div class="vide">Aucune mensuration pour l\u2019instant</div>')
     + '</div>';
   c.innerHTML = html;
   rendrePhotosGrille(document.getElementById("photosMembre"), photosMembre, uid===moi.uid);
