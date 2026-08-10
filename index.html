@@ -12,6 +12,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
@@ -200,6 +201,9 @@ const firebaseConfig = {
 };
 // Optionnel (phase 2) : URL de la Cloud Function d'analyse photo IA. Laisser vide pour l'instant.
 const FONCTION_ANALYSE_URL = "https://analyse-repas-api.brunetflorian02.workers.dev/";
+// Notifications push : à remplir une fois les deux mis en place (voir guide)
+const VAPID_KEY = "BBvZj_ZOCEPabubsFHxcttrfrtoHvodj6XP-ZxCzdrJTMhdpHh7rSNtEuDih97-fdq57UyTbl9c3Y83-1v1H0ss"; // Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
+const FONCTION_PUSH_URL = "https://envoyer-push.brunetflorian02.workers.dev/"; // URL du Worker Cloudflare "envoyer-push"
 
 /* Règles Firestore à coller dans l'onglet "Règles" :
 rules_version = '2';
@@ -581,7 +585,7 @@ service cloud.firestore {
       <div id="sousOngletReglages" class="hidden">
         <div class="carte">
           <div class="carte-titre">Alertes 🔔</div>
-          <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Rappel d'eau, rappel de repas, et alerte quand un cousin termine une séance ou bat un record. Fonctionne pendant que l'app est ouverte ou récemment ouverte — pas si le téléphone est verrouillé depuis longtemps.</div>
+          <div class="sous-texte" style="line-height:1.5; margin-bottom:10px;">Rappel d'eau, rappel de repas, et alerte quand un cousin termine une séance, bat un record ou ajoute un repas. Fonctionne pendant que l'app est ouverte ou récemment ouverte — pas si le téléphone est verrouillé depuis longtemps.</div>
           <button class="btn btn-contour" style="width:100%;" onclick="demanderPermissionNotif()">Activer les alertes</button>
           <div id="etatNotif" class="sous-texte" style="text-align:center; margin-top:8px;"></div>
         </div>
@@ -806,7 +810,7 @@ auth.onAuthStateChanged(async (user) => {
 // ═══════════ ÉCOUTES TEMPS RÉEL ═══════════
 function demarrerEcoutes(){
   db.collection("users").onSnapshot(snap => {
-    tousLesUsers = snap.docs.map(d => ({ uid: d.id, prenom: d.data().prenom, plan: d.data().plan || null }));
+    tousLesUsers = snap.docs.map(d => ({ uid: d.id, prenom: d.data().prenom, plan: d.data().plan || null, fcmToken: d.data().fcmToken || null }));
     rendreSelecteursUsers();
     rendreSelecteurEquipe();
     rendreDefiMois();
@@ -827,19 +831,6 @@ function demarrerEcoutes(){
   });
   db.collection("seances").orderBy("timestamp","desc").limit(60).onSnapshot(snap => {
     mesSeances = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    snap.docChanges().forEach(ch => {
-      if(ch.type==="added"){
-        const s = ch.doc.data();
-        if(s.userId!==moi.uid && s.timestamp>appDemarreLe){
-          const auteur = (tousLesUsers.find(u=>u.uid===s.userId)||{}).prenom || "Un cousin";
-          if(s.records && s.records.length){
-            notifier("🏆 Nouveau record !", auteur+" a battu un record : "+s.records.join(", "));
-          }else{
-            notifier("🏋️ Séance terminée", auteur+" vient de finir une séance "+s.type);
-          }
-        }
-      }
-    });
     rendreFil(); rendreMesSeances(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement(); rendreRecapSemaine();
     rendreVolumeGroupes(); rendreChoixExoComparateur(); rendreCalendrierRegularite(); rendreBadges(); rendreDefiMois();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
@@ -1446,6 +1437,11 @@ async function terminerSeance(){
     records: records,
     date: aujourdhuiISO(), timestamp: Date.now()
   });
+  if(records.length){
+    envoyerPushAuxAutres("🏆 Nouveau record !", moi.prenom+" a battu un record : "+records.join(", "));
+  }else{
+    envoyerPushAuxAutres("🏋️ Séance terminée", moi.prenom+" vient de finir une séance "+type);
+  }
   if(!routineActive && confirm("Enregistrer cette séance comme routine réutilisable ?")){
     const nom = prompt("Nom de la routine :", type.split(" (")[0]);
     if(nom && nom.trim()){
@@ -1735,12 +1731,14 @@ async function ajouterProduit(){
   if(!produitCourant) return;
   const t = calculerTotauxProduit();
   if(t.g <= 0){ toast("Indique la quantité en grammes"); return; }
+  const nomRepasAjoute = produitCourant.nom + " (" + t.g + " g)";
   await db.collection("repas").add({
     userId: moi.uid, prenom: moi.prenom,
-    nom: produitCourant.nom + " (" + t.g + " g)",
+    nom: nomRepasAjoute,
     kcal: t.kcal, prot: t.prot, gluc: t.gluc, lip: t.lip,
     photo: null, date: aujourdhuiISO(), timestamp: Date.now()
   });
+  envoyerPushAuxAutres("🍽️ Nouveau repas", moi.prenom+" a ajouté "+nomRepasAjoute+" · "+t.kcal+" kcal");
   masquerFicheProduit();
   document.getElementById("champRecherche").value = "";
   document.getElementById("resultatsRecherche").innerHTML = "";
@@ -1824,6 +1822,7 @@ async function enregistrerRepasManuel(){
   photoRepasB64 = null;
   document.getElementById("apercuRepas").classList.add("hidden");
   document.getElementById("photoRepas").value = "";
+  envoyerPushAuxAutres("🍽️ Nouveau repas", moi.prenom+" a ajouté "+nom+" · "+kcal+" kcal");
   toast("Repas enregistré 🍽️");
 }
 
@@ -2519,6 +2518,7 @@ async function ajouterRecent(item){
     nom: item.nom, kcal: item.kcal, prot: item.prot, gluc: item.gluc, lip: item.lip,
     photo: null, date: aujourdhuiISO(), timestamp: Date.now()
   });
+  envoyerPushAuxAutres("🍽️ Nouveau repas", moi.prenom+" a ajouté "+item.nom+" · "+Math.round(item.kcal)+" kcal");
   toast("Ajouté : "+Math.round(item.kcal)+" kcal 🍽️");
 }
 async function toggleFavori(item){
@@ -2688,8 +2688,37 @@ async function demanderPermissionNotif(){
   const zone = document.getElementById("etatNotif");
   if(!("Notification" in window)){ zone.textContent = "Non supporté sur ce navigateur"; return; }
   const perm = await Notification.requestPermission();
-  if(perm==="granted"){ zone.textContent = "✅ Activées"; toast("Alertes activées 🔔"); }
-  else{ zone.textContent = "❌ Refusées — active-les dans Réglages iPhone > Safari si tu changes d'avis"; }
+  if(perm==="granted"){
+    zone.textContent = "✅ Activées";
+    toast("Alertes activées 🔔");
+    await activerPushFCM();
+  }else{
+    zone.textContent = "❌ Refusées — active-les dans Réglages iPhone > Safari si tu changes d'avis";
+  }
+}
+
+async function activerPushFCM(){
+  if(!VAPID_KEY || !swReg) return;
+  try{
+    const messagingInstance = firebase.messaging();
+    messagingInstance.useServiceWorker(swReg);
+    const token = await messagingInstance.getToken({ vapidKey: VAPID_KEY });
+    if(token) await db.collection("users").doc(moi.uid).update({ fcmToken: token });
+  }catch(e){
+    console.error("Activation push impossible :", e);
+  }
+}
+
+async function envoyerPushAuxAutres(titre, corps){
+  if(!FONCTION_PUSH_URL) return;
+  const autres = tousLesUsers.filter(u => u.uid!==moi.uid && u.fcmToken);
+  autres.forEach(u => {
+    fetch(FONCTION_PUSH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: u.fcmToken, titre: titre, corps: corps })
+    }).catch(() => {});
+  });
 }
 
 function cleDedupe(type){ return "lafonte_rappel_" + type + "_" + aujourdhuiISO(); }
