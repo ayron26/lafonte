@@ -1,78 +1,39 @@
-// ═══════════════════════════════════════════════════════════
-// La Fonte — Analyse photo de repas (Cloudflare Worker)
-// À coller tel quel dans un Worker sur workers.cloudflare.com
-// Puis ajouter la variable secrète CLE_ANTHROPIC (ta clé API)
-// ═══════════════════════════════════════════════════════════
+// La Fonte — Service Worker
+// Affiche les notifications locales (rappels) ET les vraies notifications
+// push envoyées via Firebase Cloud Messaging, même app fermée.
 
-export default {
-  async fetch(request, env) {
-    // CORS : autorise ton app à appeler ce serveur
-    const enTetes = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Content-Type": "application/json"
-    };
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: enTetes });
-    }
-    if (request.method !== "POST") {
-      return new Response(JSON.stringify({ erreur: "POST uniquement" }), { status: 405, headers: enTetes });
-    }
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
-    try {
-      const { image, mediaType } = await request.json();
-      if (!image) {
-        return new Response(JSON.stringify({ erreur: "image manquante" }), { status: 400, headers: enTetes });
+firebase.initializeApp({
+  apiKey: "AIzaSyAJeWqvX2aoG-2kxJs_Yr6sYjlsegCiXNg",
+  authDomain: "lafonte-muscu.firebaseapp.com",
+  projectId: "lafonte-muscu",
+  storageBucket: "lafonte-muscu.firebasestorage.app",
+  messagingSenderId: "37478179131",
+  appId: "1:37478179131:web:2341ed54d34c22351ad71e"
+});
+
+// Initialise Firebase Messaging : affiche automatiquement les notifications
+// reçues quand l'app est fermée ou en arrière-plan.
+firebase.messaging();
+
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clientsArr) => {
+      if (clientsArr.length > 0) {
+        return clientsArr[0].focus();
       }
-
-      const reponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.CLE_ANTHROPIC,
-          "anthropic-version": "2023-06-01"
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 600,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: mediaType || "image/jpeg", data: image } },
-              { type: "text", text: `Analyse cette photo de repas. Identifie les aliments et estime les portions.
-
-Réponds UNIQUEMENT avec un objet JSON valide, sans backticks ni texte autour, avec EXACTEMENT ces 5 clés :
-{"nom": string, "totalCalories": number, "totalProteines": number, "totalGlucides": number, "totalLipides": number}
-
-Règles strictes pour les 4 champs numériques :
-- Ce sont des nombres purs, jamais du texte. Écris 45 et non "45", jamais "45g" ni "45 grammes" ni "environ 45".
-- Estime réellement chacun des 4 champs (calories, protéines, glucides, lipides) à partir de ce que tu vois — ne laisse jamais un champ à 0 sauf si l'assiette ne contient vraiment aucun aliment.
-- totalCalories est en kcal. totalProteines, totalGlucides et totalLipides sont en grammes.
-
-Si aucun aliment n'est visible sur la photo, réponds : {"nom":"","totalCalories":0,"totalProteines":0,"totalGlucides":0,"totalLipides":0}` }
-            ]
-          }]
-        })
-      });
-
-      const donnees = await reponse.json();
-      if (!reponse.ok) {
-        return new Response(JSON.stringify({ erreur: "API Anthropic : " + (donnees.error?.message || reponse.status) }), { status: 502, headers: enTetes });
-      }
-
-      const texte = (donnees.content || [])
-        .filter(b => b.type === "text")
-        .map(b => b.text)
-        .join("\n")
-        .replace(/```json|```/g, "")
-        .trim();
-
-      const resultat = JSON.parse(texte);
-      return new Response(JSON.stringify(resultat), { headers: enTetes });
-
-    } catch (e) {
-      return new Response(JSON.stringify({ erreur: "Analyse impossible : " + e.message }), { status: 500, headers: enTetes });
-    }
-  }
-};
+      return self.clients.openWindow("./");
+    })
+  );
+});
