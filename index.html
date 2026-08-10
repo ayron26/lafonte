@@ -2698,14 +2698,20 @@ async function demanderPermissionNotif(){
 }
 
 async function activerPushFCM(){
-  if(!VAPID_KEY || !swReg) return;
+  if(!VAPID_KEY){ toast("⚠️ Clé VAPID manquante côté app"); return; }
+  if(!swReg){ toast("⚠️ Service worker pas encore prêt — réessaie dans quelques secondes"); return; }
   try{
     const messagingInstance = firebase.messaging();
     messagingInstance.useServiceWorker(swReg);
     const token = await messagingInstance.getToken({ vapidKey: VAPID_KEY });
-    if(token) await db.collection("users").doc(moi.uid).update({ fcmToken: token });
+    if(token){
+      await db.collection("users").doc(moi.uid).update({ fcmToken: token });
+      toast("🔔 Push activé — tu recevras les notifs même app fermée");
+    }else{
+      toast("⚠️ Aucun token reçu — ouvre l'app depuis l'icône écran d'accueil, pas Safari");
+    }
   }catch(e){
-    console.error("Activation push impossible :", e);
+    toast("⚠️ Échec activation push : " + e.message);
   }
 }
 
