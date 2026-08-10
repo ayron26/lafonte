@@ -926,11 +926,12 @@ function reagir(collection, id, emoji, arrActuel){
 
 // ═══════════ COMMENTAIRES ═══════════
 const commentairesOuverts = new Set();
-function ligneCommentaires(collection, id, commentairesArr){
+function ligneCommentaires(collection, id, commentairesArr, proprietaireUid){
   const commentaires = commentairesArr || [];
   const cle = collection + ":" + id;
   const wrap = document.createElement("div");
   const toggle = document.createElement("button");
+  toggle.type = "button";
   toggle.className = "btn-commentaire";
   toggle.textContent = "💬 " + (commentaires.length ? commentaires.length+" commentaire"+(commentaires.length>1?"s":"") : "Commenter");
   const panneau = document.createElement("div");
@@ -946,35 +947,69 @@ function ligneCommentaires(collection, id, commentairesArr){
   const input = document.createElement("input");
   input.type = "text";
   input.placeholder = "Écrire un commentaire…";
-  input.onclick = (ev) => ev.stopPropagation();
+  input.addEventListener("click", (ev) => ev.stopPropagation());
+  input.addEventListener("focus", () => {
+    setTimeout(() => wrap.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+  });
   const btnEnvoyer = document.createElement("button");
+  btnEnvoyer.type = "button";
   btnEnvoyer.textContent = "Envoyer";
   const envoyer = (ev) => {
-    ev.stopPropagation();
+    if(ev){ ev.preventDefault(); ev.stopPropagation(); }
     const texte = input.value.trim();
     if(!texte) return;
     commentairesOuverts.add(cle);
-    ajouterCommentaire(collection, id, texte);
     input.value = "";
+    input.blur();
+    ajouterCommentaire(collection, id, texte, proprietaireUid);
   };
-  btnEnvoyer.onclick = envoyer;
-  input.onkeydown = (ev) => { if(ev.key==="Enter") envoyer(ev); };
+  btnEnvoyer.addEventListener("click", envoyer);
+  btnEnvoyer.addEventListener("touchend", envoyer);
+  input.addEventListener("keydown", (ev) => { if(ev.key==="Enter") envoyer(ev); });
   form.appendChild(input); form.appendChild(btnEnvoyer);
   panneau.appendChild(form);
-  toggle.onclick = (ev) => {
+  toggle.addEventListener("click", (ev) => {
     ev.stopPropagation();
     if(commentairesOuverts.has(cle)) commentairesOuverts.delete(cle);
     else commentairesOuverts.add(cle);
     panneau.classList.toggle("hidden");
-  };
+    if(!panneau.classList.contains("hidden")){
+      setTimeout(() => wrap.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+    }
+  });
   wrap.appendChild(toggle);
   wrap.appendChild(panneau);
   return wrap;
 }
-async function ajouterCommentaire(collection, id, texte){
+async function ajouterCommentaire(collection, id, texte, proprietaireUid){
   await db.collection(collection).doc(id).update({
     commentaires: firebase.firestore.FieldValue.arrayUnion({ userId: moi.uid, prenom: moi.prenom, texte: texte, timestamp: Date.now() })
-  }).catch(() => toast("Erreur lors de l'envoi"));
+  }).then(() => {
+    toast("💬 Commentaire envoyé");
+    if(proprietaireUid && proprietaireUid!==moi.uid){
+      envoyerPushA(proprietaireUid, "💬 "+moi.prenom+" a commenté", texte.length>80 ? texte.slice(0,77)+"…" : texte);
+    }
+  }).catch((e) => {
+    toast("⚠️ Erreur lors de l'envoi : " + e.message);
+  });
+}
+async function envoyerPushA(uid, titre, corps){
+  if(!FONCTION_PUSH_URL) return;
+  const u = tousLesUsers.find(x => x.uid===uid);
+  if(!u || !u.fcmToken) return;
+  try{
+    const rep = await fetch(FONCTION_PUSH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: u.fcmToken, titre: titre, corps: corps })
+    });
+    const data = await rep.json().catch(() => ({}));
+    if(!rep.ok || data.erreur){
+      toast("⚠️ Push vers "+u.prenom+" échoué : "+(data.erreur || ("HTTP "+rep.status)));
+    }
+  }catch(e){
+    toast("⚠️ Push vers "+u.prenom+" : erreur réseau ("+e.message+")");
+  }
 }
 
 function rendreFil(){
@@ -1012,7 +1047,7 @@ function rendreFil(){
       + '<div class="quand">'+tempsRelatif(it.ts)+'</div>';
     div.onclick = () => div.classList.toggle("ouvert");
     div.querySelector(".contenu").appendChild(ligneReactions(it.type==="seance" ? "seances" : "repas", it.data.id, it.data.reactions));
-    div.querySelector(".contenu").appendChild(ligneCommentaires(it.type==="seance" ? "seances" : "repas", it.data.id, it.data.commentaires));
+    div.querySelector(".contenu").appendChild(ligneCommentaires(it.type==="seance" ? "seances" : "repas", it.data.id, it.data.commentaires, it.data.userId));
     c.appendChild(div);
   });
 }
@@ -2249,7 +2284,7 @@ function afficherProfilMembre(uid){
       + '<div class="quand">'+tempsRelatif(s.timestamp)+'</div>';
     div.onclick = () => div.classList.toggle("ouvert");
     div.querySelector(".contenu").appendChild(ligneReactions("seances", s.id, s.reactions));
-    div.querySelector(".contenu").appendChild(ligneCommentaires("seances", s.id, s.commentaires));
+    div.querySelector(".contenu").appendChild(ligneCommentaires("seances", s.id, s.commentaires, s.userId));
     ls.appendChild(div);
   });
 }
@@ -2380,7 +2415,7 @@ function voirPhotoProgres(url, id, avecSuppression, prenom){
   const zoneCommentaires = document.getElementById("commentairesPhoto");
   zoneCommentaires.innerHTML = "";
   const photo = tousPhotosProgres.find(p => p.id===id);
-  zoneCommentaires.appendChild(ligneCommentaires("photos", id, photo ? photo.commentaires : []));
+  zoneCommentaires.appendChild(ligneCommentaires("photos", id, photo ? photo.commentaires : [], photo ? photo.userId : null));
   document.getElementById("voilePhotoProgres").classList.remove("hidden");
 }
 function fermerPhotoProgres(){
