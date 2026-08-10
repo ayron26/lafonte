@@ -2721,8 +2721,7 @@ async function activerPushFCM(){
   }
   try{
     const messagingInstance = firebase.messaging();
-    messagingInstance.useServiceWorker(swReg);
-    const token = await messagingInstance.getToken({ vapidKey: VAPID_KEY });
+    const token = await messagingInstance.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
     if(token){
       await db.collection("users").doc(moi.uid).update({ fcmToken: token });
       toast("🔔 Push activé — tu recevras les notifs même app fermée");
