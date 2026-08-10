@@ -930,14 +930,16 @@ function reagir(collection, id, emoji, arrActuel){
 }
 
 // ═══════════ COMMENTAIRES ═══════════
+const commentairesOuverts = new Set();
 function ligneCommentaires(collection, id, commentairesArr){
   const commentaires = commentairesArr || [];
+  const cle = collection + ":" + id;
   const wrap = document.createElement("div");
   const toggle = document.createElement("button");
   toggle.className = "btn-commentaire";
   toggle.textContent = "💬 " + (commentaires.length ? commentaires.length+" commentaire"+(commentaires.length>1?"s":"") : "Commenter");
   const panneau = document.createElement("div");
-  panneau.className = "panneau-commentaires hidden";
+  panneau.className = "panneau-commentaires" + (commentairesOuverts.has(cle) ? "" : " hidden");
   commentaires.slice().sort((a,b)=>a.timestamp-b.timestamp).forEach(cmt => {
     const ligne = document.createElement("div");
     ligne.className = "ligne-commentaire";
@@ -956,6 +958,7 @@ function ligneCommentaires(collection, id, commentairesArr){
     ev.stopPropagation();
     const texte = input.value.trim();
     if(!texte) return;
+    commentairesOuverts.add(cle);
     ajouterCommentaire(collection, id, texte);
     input.value = "";
   };
@@ -963,7 +966,12 @@ function ligneCommentaires(collection, id, commentairesArr){
   input.onkeydown = (ev) => { if(ev.key==="Enter") envoyer(ev); };
   form.appendChild(input); form.appendChild(btnEnvoyer);
   panneau.appendChild(form);
-  toggle.onclick = (ev) => { ev.stopPropagation(); panneau.classList.toggle("hidden"); };
+  toggle.onclick = (ev) => {
+    ev.stopPropagation();
+    if(commentairesOuverts.has(cle)) commentairesOuverts.delete(cle);
+    else commentairesOuverts.add(cle);
+    panneau.classList.toggle("hidden");
+  };
   wrap.appendChild(toggle);
   wrap.appendChild(panneau);
   return wrap;
