@@ -2725,14 +2725,27 @@ async function activerPushFCM(){
 
 async function envoyerPushAuxAutres(titre, corps){
   if(!FONCTION_PUSH_URL) return;
-  const autres = tousLesUsers.filter(u => u.uid!==moi.uid && u.fcmToken);
-  autres.forEach(u => {
-    fetch(FONCTION_PUSH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: u.fcmToken, titre: titre, corps: corps })
-    }).catch(() => {});
-  });
+  const autres = tousLesUsers.filter(u => u.uid!==moi.uid);
+  const avecToken = autres.filter(u => u.fcmToken);
+  if(avecToken.length===0){
+    toast("ℹ️ Aucun cousin n'a le push activé pour l'instant");
+    return;
+  }
+  for(const u of avecToken){
+    try{
+      const rep = await fetch(FONCTION_PUSH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: u.fcmToken, titre: titre, corps: corps })
+      });
+      const data = await rep.json().catch(() => ({}));
+      if(!rep.ok || data.erreur){
+        toast("⚠️ Push vers "+u.prenom+" échoué : "+(data.erreur || ("HTTP "+rep.status)));
+      }
+    }catch(e){
+      toast("⚠️ Push vers "+u.prenom+" : erreur réseau ("+e.message+")");
+    }
+  }
 }
 
 function cleDedupe(type){ return "lafonte_rappel_" + type + "_" + aujourdhuiISO(); }
