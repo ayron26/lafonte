@@ -794,6 +794,7 @@ auth.onAuthStateChanged(async (user) => {
     document.getElementById("app").classList.remove("hidden");
     document.getElementById("profilNom").textContent = moi.prenom;
     remplirChampsPlan();
+    rafraichirEtatNotif();
     const auj = new Date();
     document.getElementById("dateJour").textContent = JOURS[auj.getDay()] + " " + auj.getDate() + " " + MOIS[auj.getMonth()];
     if(FONCTION_ANALYSE_URL) document.getElementById("btnAnalyseIA").classList.remove("hidden");
@@ -2684,6 +2685,13 @@ function notifier(titre, corps){
   }
 }
 
+function rafraichirEtatNotif(){
+  const zone = document.getElementById("etatNotif");
+  if(!zone || !("Notification" in window)) return;
+  if(Notification.permission==="granted") zone.textContent = "✅ Activées";
+  else if(Notification.permission==="denied") zone.textContent = "❌ Refusées — active-les dans Réglages iPhone > Safari si tu changes d'avis";
+  else zone.textContent = "";
+}
 async function demanderPermissionNotif(){
   const zone = document.getElementById("etatNotif");
   if(!("Notification" in window)){ zone.textContent = "Non supporté sur ce navigateur"; return; }
