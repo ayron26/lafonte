@@ -292,16 +292,19 @@ service cloud.firestore {
     <!-- ═══ SÉANCE ═══ -->
     <div id="onglet-seance" class="hidden">
       <div id="seanceAccueil">
-        <div class="carte">
-          <div class="carte-titre">Mes routines <span class="sous-texte" style="text-transform:none;letter-spacing:0;">1 tap pour démarrer</span></div>
-          <div id="listeRoutines"><div class="vide">Aucune routine pour l'instant.<br>Calcule ton plan dans l'onglet Moi pour générer un programme, ou fais une séance libre.</div></div>
+        <div class="selecteur-user" id="selecteurUserSeance"></div>
+        <div id="zoneMesRoutines">
+          <div class="carte">
+            <div class="carte-titre">Mes routines <span class="sous-texte" style="text-transform:none;letter-spacing:0;">1 tap pour démarrer</span></div>
+            <div id="listeRoutines"><div class="vide">Aucune routine pour l'instant.<br>Calcule ton plan dans l'onglet Moi pour générer un programme, ou fais une séance libre.</div></div>
+          </div>
+          <div class="carte" style="text-align:center;">
+            <button class="btn btn-accent" onclick="demarrerSeance()" style="margin-bottom:8px;">Séance libre</button>
+            <button class="btn btn-contour" style="width:100%;" onclick="ouvrirConstructeurRoutine()">📝 Créer mon programme</button>
+          </div>
         </div>
-        <div class="carte" style="text-align:center;">
-          <button class="btn btn-accent" onclick="demarrerSeance()" style="margin-bottom:8px;">Séance libre</button>
-          <button class="btn btn-contour" style="width:100%;" onclick="ouvrirConstructeurRoutine()">📝 Créer mon programme</button>
-        </div>
         <div class="carte">
-          <div class="carte-titre">Tes dernières séances</div>
+          <div class="carte-titre" id="titreDernieresSeances">Tes dernières séances <span class="sous-texte" style="text-transform:none;letter-spacing:0;">taper pour le détail</span></div>
           <div id="listeMesSeances"><div class="vide">Aucune séance enregistrée</div></div>
         </div>
       </div>
@@ -704,6 +707,7 @@ let tousRepas = [];
 let routines = [];
 let modeInscription = false;
 let userRepasAffiche = null;
+let userSeanceAffiche = null;
 let listeRepasEtendue = false;
 let dateRepasAffichee = null;
 let userProgresAffiche = null;
@@ -796,6 +800,7 @@ auth.onAuthStateChanged(async (user) => {
     const d = doc.exists ? doc.data() : { prenom: "Moi" };
     moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [], objectifPoids: d.objectifPoids || null };
     userRepasAffiche = moi.uid;
+    userSeanceAffiche = moi.uid;
     userProgresAffiche = moi.uid;
     dateRepasAffichee = aujourdhuiISO();
     document.getElementById("ecranConnexion").classList.add("hidden");
@@ -845,7 +850,7 @@ function demarrerEcoutes(){
   });
   db.collection("seances").orderBy("timestamp","desc").limit(60).onSnapshot(snap => {
     mesSeances = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    rendreFil(); rendreMesSeances(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement(); rendreRecapSemaine();
+    rendreFil(); rendreAccueilSeance(); rendreChoixExos(); afficherProgression(); rendreStats(); majCoach(); rendreClassement(); rendreRecapSemaine();
     rendreVolumeGroupes(); rendreChoixExoComparateur(); rendreCalendrierRegularite(); rendreBadges(); rendreDefiMois();
     if(vueEquipe!=="fil") afficherProfilMembre(vueEquipe);
   });
@@ -895,6 +900,7 @@ function rendreSelecteursUsers(){
     });
   };
   faire("selecteurUserRepas", userRepasAffiche, (uid)=>{ userRepasAffiche=uid; listeRepasEtendue=false; dateRepasAffichee=aujourdhuiISO(); rendreSelecteursUsers(); rendreRepas(); });
+  faire("selecteurUserSeance", userSeanceAffiche, (uid)=>{ userSeanceAffiche=uid; rendreSelecteursUsers(); rendreAccueilSeance(); });
   faire("selecteurUserProgres", userProgresAffiche, (uid)=>{ userProgresAffiche=uid; rendreSelecteursUsers(); rendreChoixExos(); afficherProgression(); rendreVolumeGroupes(); });
 }
 
@@ -1521,15 +1527,39 @@ function annulerSeance(){
   document.getElementById("seanceAccueil").classList.remove("hidden");
 }
 
-function rendreMesSeances(){
-  const c = document.getElementById("listeMesSeances");
-  const miennes = mesSeances.filter(s => s.userId===moi.uid).slice(0,5);
-  if(miennes.length===0){ c.innerHTML = '<div class="vide">Aucune séance enregistrée</div>'; return; }
-  c.innerHTML = miennes.map(s =>
-    '<div style="padding:9px 0;border-bottom:1px solid var(--ligne);font-size:13px;">'
-    + '<b>'+echap(s.type)+'</b> · '+(s.exos||[]).length+' exos · '+s.duree+' min'
-    + '<span class="sous-texte" style="float:right;">'+tempsRelatif(s.timestamp)+'</span></div>'
-  ).join("");
+function rendreAccueilSeance(){
+  const estMoi = userSeanceAffiche===moi.uid;
+  document.getElementById("zoneMesRoutines").classList.toggle("hidden", !estMoi);
+  document.getElementById("titreDernieresSeances").innerHTML = (estMoi ? "Tes" : "Ses")+" dernières séances <span class=\"sous-texte\" style=\"text-transform:none;letter-spacing:0;\">taper pour le détail</span>";
+  const liste = mesSeances.filter(s => s.userId===userSeanceAffiche).slice(0, 10);
+  rendreListeSeancesDetaillee("listeMesSeances", liste);
+}
+
+// Liste de séances avec détail dépliable + réactions + commentaires.
+// Réutilisée pour "mes" séances (accueil Séance) et celles d'un cousin (fiche Équipe).
+function rendreListeSeancesDetaillee(conteneurId, liste){
+  const c = document.getElementById(conteneurId);
+  if(!c) return;
+  if(liste.length===0){ c.innerHTML = '<div class="vide">Aucune séance enregistrée</div>'; return; }
+  c.innerHTML = "";
+  liste.forEach(s => {
+    const div = document.createElement("div");
+    div.className = "item-fil";
+    let quoi = (s.exos||[]).length+" exos · "+(s.duree||"?")+" min";
+    let detail = (s.exos||[]).map(e => "<b>"+echap(e.nom)+"</b> : " + e.series.map(x => x.reps+"×"+x.poids+"kg").join(", ")).join("<br>");
+    if(s.records && s.records.length){
+      quoi = "🏆 " + quoi;
+      detail = '<div style="color:var(--or);font-weight:700;margin-bottom:6px;">🏆 Record : '+s.records.map(echap).join(" · ")+'</div>' + detail;
+    }
+    div.innerHTML = '<div class="pastille seance">🏋️</div>'
+      + '<div class="contenu"><div class="qui">'+echap(s.type)+'</div>'
+      + '<div class="quoi">'+quoi+'</div><div class="detail">'+detail+'</div></div>'
+      + '<div class="quand">'+tempsRelatif(s.timestamp)+'</div>';
+    div.onclick = () => div.classList.toggle("ouvert");
+    div.querySelector(".contenu").appendChild(ligneReactions("seances", s.id, s.reactions));
+    div.querySelector(".contenu").appendChild(ligneCommentaires("seances", s.id, s.commentaires, s.userId));
+    c.appendChild(div);
+  });
 }
 
 // ═══════════ REPAS — SCANNER / RECHERCHE / MANUEL ═══════════
@@ -2228,7 +2258,7 @@ function afficherProfilMembre(uid){
   debutSemaine.setDate(debutSemaine.getDate() - ((debutSemaine.getDay()+6)%7));
   debutSemaine.setHours(0,0,0,0);
   const seancesSem = mesSeances.filter(s => s.userId===uid && s.timestamp>=debutSemaine.getTime()).length;
-  const dernieres = mesSeances.filter(s => s.userId===uid).slice(0,4);
+  const dernieres = mesSeances.filter(s => s.userId===uid).slice(0,10);
   const eau = eauDocs.find(e => e.userId===uid && e.date===aujourdhuiISO());
   const poidsMembre = tousPoids.filter(p => p.userId===uid).sort((a,b)=>a.timestamp-b.timestamp);
   const dernierPoids = poidsMembre.length ? poidsMembre[poidsMembre.length-1].kg : null;
@@ -2282,21 +2312,7 @@ function afficherProfilMembre(uid){
       + '<div class="kcal">'+Math.round(r.kcal||0)+' kcal</div>';
     lr.appendChild(div);
   });
-  const ls = document.getElementById("listeSeancesMembre");
-  dernieres.forEach(s => {
-    const div = document.createElement("div");
-    div.className = "item-fil";
-    const detail = (s.exos||[]).map(e => "<b>"+echap(e.nom)+"</b> : " + e.series.map(x => x.reps+"×"+x.poids+"kg").join(", ")).join("<br>");
-    div.innerHTML = '<div class="pastille seance">🏋️</div>'
-      + '<div class="contenu"><div class="qui">'+echap(s.type)+'</div>'
-      + '<div class="quoi">'+(s.exos||[]).length+' exos · '+(s.duree||"?")+' min</div>'
-      + '<div class="detail">'+detail+'</div></div>'
-      + '<div class="quand">'+tempsRelatif(s.timestamp)+'</div>';
-    div.onclick = () => div.classList.toggle("ouvert");
-    div.querySelector(".contenu").appendChild(ligneReactions("seances", s.id, s.reactions));
-    div.querySelector(".contenu").appendChild(ligneCommentaires("seances", s.id, s.commentaires, s.userId));
-    ls.appendChild(div);
-  });
+  rendreListeSeancesDetaillee("listeSeancesMembre", dernieres);
 }
 
 // ═══════════ PHOTOS DE PROGRESSION (partagées avec l'équipe) ═══════════
