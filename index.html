@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0C0D0F">
+<meta name="theme-color" content="#0A0908">
 <title>La Fonte</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,500;0,700;0,900;1,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800;900&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -17,17 +17,50 @@
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
   :root{
-    --noir:#0C0D0F; --carte:#17181B; --carte2:#1F2126;
-    --craie:#F4F2ED; --gris:#8E939B; --ligne:#2A2D33;
-    --accent:#FF6B1A; --accent-fonce:#E05A10;
-    --vert:#4CC38A; --or:#F2B84B; --rose:#E85B6E;
+    --noir:#0A0908; --carte:#17130F; --carte2:#211B15;
+    --craie:#EDE8E0; --gris:#948A7C; --ligne:#3D342A;
+    --accent:#FF5A1F; --accent-fonce:#E0480D; --braise-vif:#FF7A3D;
+    --vert:#6FBF73; --or:#FFB020; --rose:#FF5A5A;
   }
   *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
-  html{-webkit-text-size-adjust:100%;}
-  body{background:var(--noir); color:var(--craie); font-family:'Inter',system-ui,sans-serif; padding-bottom:calc(72px + env(safe-area-inset-bottom));}
-  h1,h2,h3,.titre{font-family:'Archivo',sans-serif;}
-  .marque{font-family:'Archivo'; font-style:italic; font-weight:900; text-transform:uppercase; letter-spacing:-0.03em;}
-  .marque span{color:var(--accent);}
+  html{-webkit-text-size-adjust:100%; overflow-x:hidden;}
+  body{
+    background:
+      radial-gradient(ellipse 600px 400px at 15% 0%, rgba(255,90,31,.09), transparent 60%),
+      radial-gradient(ellipse 500px 500px at 100% 100%, rgba(255,176,32,.05), transparent 60%),
+      var(--noir);
+    color:var(--craie); font-family:'Inter',system-ui,sans-serif; padding-bottom:calc(72px + env(safe-area-inset-bottom));
+    position:relative;
+  }
+
+  /* ── Braises ambiantes (respecte "réduire les animations") ── */
+  .braises{position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden;}
+  .braise-point{position:absolute; bottom:-10px; border-radius:50%; background:radial-gradient(circle, var(--or), var(--accent) 60%, transparent 100%); opacity:0; animation:monter linear infinite;}
+  @keyframes monter{
+    0%{ transform:translateY(0) translateX(0); opacity:0; }
+    8%{ opacity:.5; } 90%{ opacity:.22; }
+    100%{ transform:translateY(-100vh) translateX(var(--derive,20px)); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .braise-point{ display:none; }
+    .ignite, .carte{ animation:none !important; }
+  }
+
+  /* ── Signature : chiffres "en fusion" ── */
+  .chiffre-fonte{
+    background:linear-gradient(135deg, var(--or) 0%, var(--accent) 55%, var(--braise-vif) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 12px rgba(255,90,31,.4));
+  }
+
+  /* ── Ignition : flash au tap ── */
+  @keyframes ignition{ 0%{ box-shadow:0 0 0 0 rgba(255,176,32,.55); } 100%{ box-shadow:0 0 0 18px rgba(255,176,32,0); } }
+  .ignite{ animation:ignition .5s ease-out; }
+
+  @keyframes entree{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+  h1,h2,h3,.titre{font-family:'Unbounded',sans-serif,sans-serif;}
+  .marque{font-family:'Unbounded',sans-serif; font-weight:900; text-transform:uppercase; letter-spacing:-0.03em;}
+  .marque span{background:linear-gradient(135deg,var(--or),var(--accent)); -webkit-background-clip:text; background-clip:text; color:transparent;}
   button{font-family:inherit; cursor:pointer;}
   input,select,textarea{font-family:inherit; font-size:16px;}
 
@@ -38,12 +71,13 @@
   .entete h1{font-size:26px;}
   .entete .date-jour{font-size:12px; color:var(--gris); text-transform:capitalize; font-weight:500;}
 
-  .carte{background:var(--carte); border:1px solid var(--ligne); border-radius:16px; padding:16px; margin-bottom:12px;}
-  .carte-titre{font-family:'Archivo'; font-weight:700; font-size:15px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:baseline; text-transform:uppercase; letter-spacing:.03em;}
+  .carte{background:linear-gradient(180deg, var(--carte2), var(--carte)); border:1px solid var(--ligne); border-radius:16px; padding:16px; margin-bottom:12px; position:relative; overflow:hidden; animation:entree .4s ease-out backwards;}
+  .carte::before{content:''; position:absolute; inset:0; border-radius:16px; padding:1px; background:linear-gradient(135deg, rgba(255,176,32,.3), transparent 40%, transparent 60%, rgba(255,90,31,.18)); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;}
+  .carte-titre{font-family:'Unbounded',sans-serif; font-weight:700; font-size:15px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:baseline; text-transform:uppercase; letter-spacing:.03em;}
   .sous-texte{font-size:12px; color:var(--gris);}
 
-  .btn{border:none; border-radius:14px; padding:15px 20px; font-weight:800; font-size:16px; font-family:'Archivo'; text-transform:uppercase; letter-spacing:.02em;}
-  .btn-accent{background:var(--accent); color:#0C0D0F; width:100%;}
+  .btn{border:none; border-radius:14px; padding:15px 20px; font-weight:800; font-size:16px; font-family:'Unbounded',sans-serif; text-transform:uppercase; letter-spacing:.02em;}
+  .btn-accent{background:var(--accent); color:#0A0908; width:100%;}
   .btn-accent:active{background:var(--accent-fonce);}
   .btn-contour{background:transparent; border:1.5px solid var(--ligne); color:var(--craie);}
   .btn-petit{padding:10px 14px; font-size:13px; border-radius:11px;}
@@ -63,17 +97,18 @@
   #ecranConnexion .devise{text-align:center; color:var(--gris); font-size:13px; margin-bottom:28px; text-transform:uppercase; letter-spacing:.18em; font-weight:600;}
 
   /* ── Nav ── */
-  nav{position:fixed; bottom:0; left:0; right:0; background:rgba(23,24,27,.96); backdrop-filter:blur(12px); border-top:1px solid var(--ligne); display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:50;}
-  nav button{flex:1; background:none; border:none; color:var(--gris); padding:11px 0 9px; font-size:10px; display:flex; flex-direction:column; align-items:center; gap:3px; font-weight:700; letter-spacing:.02em;}
-  nav button.actif{color:var(--accent);}
-  nav .picto{font-size:21px; line-height:1;}
+  nav{position:fixed; bottom:0; left:0; right:0; background:rgba(23,19,15,.88); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-top:1px solid var(--ligne); display:flex; padding-bottom:env(safe-area-inset-bottom); z-index:50;}
+  nav button{flex:1; background:none; border:none; color:var(--gris); padding:11px 0 9px; font-family:'Space Mono',monospace; font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; display:flex; flex-direction:column; align-items:center; gap:3px; font-weight:700;}
+  nav button.actif{color:var(--or);}
+  nav .picto{font-size:21px; line-height:1; filter:grayscale(1) opacity(.65); transition:filter .2s;}
+  nav button.actif .picto{filter:none; text-shadow:0 0 12px rgba(255,176,32,.55);}
 
   /* ── Fil ── */
   .item-fil{display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--ligne); cursor:pointer;}
   .item-fil:last-child{border-bottom:none;}
   .pastille{width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0;}
-  .pastille.seance{background:rgba(255,107,26,.14);}
-  .pastille.repas{background:rgba(242,184,75,.14);}
+  .pastille.seance{background:rgba(255,90,31,.14);}
+  .pastille.repas{background:rgba(255,176,32,.14);}
   .item-fil .contenu{flex:1; min-width:0;}
   .item-fil .qui{font-weight:700; font-size:14px;}
   .item-fil .quoi{font-size:13px; color:var(--gris); margin-top:1px;}
@@ -82,7 +117,7 @@
   .item-fil.ouvert .detail{display:block;}
   .reactions-fil{display:flex; gap:6px; margin-top:7px; flex-wrap:wrap;}
   .reactions-fil button{background:var(--carte2); border:1px solid var(--ligne); border-radius:999px; padding:4px 9px; font-size:13px; color:var(--gris); line-height:1.3;}
-  .reactions-fil button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,107,26,.12);}
+  .reactions-fil button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,90,31,.12);}
 
   .btn-commentaire{background:none; border:none; color:var(--gris); font-size:12px; padding:4px 0; text-decoration:underline;}
   .panneau-commentaires{margin-top:6px; background:var(--carte2); border-radius:10px; padding:8px 10px;}
@@ -90,14 +125,14 @@
   .ligne-commentaire:last-of-type{border-bottom:none;}
   .form-commentaire{display:flex; gap:6px; margin-top:6px;}
   .form-commentaire input{flex:1; background:var(--noir); border:1px solid var(--ligne); border-radius:8px; padding:7px 9px; color:var(--craie); font-size:13px;}
-  .form-commentaire button{background:var(--accent); border:none; border-radius:8px; padding:0 12px; color:#0C0D0F; font-weight:700; font-size:12px;}
+  .form-commentaire button{background:var(--accent); border:none; border-radius:8px; padding:0 12px; color:#0A0908; font-weight:700; font-size:12px;}
 
   /* ── Séance / mode salle ── */
-  .chrono{font-family:'Archivo'; font-style:italic; font-weight:900; font-size:38px; text-align:center; letter-spacing:.01em;}
+  .chrono{font-family:'Unbounded',sans-serif; font-weight:900; font-size:38px; text-align:center; letter-spacing:.01em;}
   .bloc-exo{background:var(--carte2); border-radius:14px; padding:13px; margin-bottom:10px;}
-  .bloc-exo .nom-exo{font-weight:800; font-family:'Archivo'; font-size:16px; margin-bottom:3px; text-transform:uppercase; letter-spacing:.01em;}
+  .bloc-exo .nom-exo{font-weight:800; font-family:'Unbounded',sans-serif; font-size:16px; margin-bottom:3px; text-transform:uppercase; letter-spacing:.01em;}
   .derniere-perf{font-size:12px; color:var(--or); margin-bottom:8px; font-weight:500;}
-  .badge-sugg{font-size:12px; color:var(--vert); background:rgba(76,195,138,.13); border-radius:9px; padding:6px 10px; margin-bottom:10px; display:inline-block; font-weight:700;}
+  .badge-sugg{font-size:12px; color:var(--vert); background:rgba(111,191,115,.13); border-radius:9px; padding:6px 10px; margin-bottom:10px; display:inline-block; font-weight:700;}
   .ligne-serie{display:flex; align-items:center; gap:6px; margin-bottom:8px;}
   .ligne-serie .num{width:20px; font-size:12px; color:var(--gris); font-weight:700; flex-shrink:0;}
   .ligne-serie .x{color:var(--gris); font-size:13px; flex-shrink:0;}
@@ -107,7 +142,7 @@
   .stepper input{width:44px; height:46px; text-align:center; background:none; border:none; color:var(--craie); font-size:16px; font-weight:700; padding:0; -moz-appearance:textfield;}
   .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;}
   .btn-check{width:48px; height:46px; border-radius:11px; border:1.5px solid var(--ligne); background:transparent; color:var(--gris); font-size:17px; font-weight:800; flex-shrink:0; margin-left:auto;}
-  .btn-check.ok{background:var(--vert); border-color:var(--vert); color:#0C0D0F;}
+  .btn-check.ok{background:var(--vert); border-color:var(--vert); color:#0A0908;}
   .suppr-serie{background:none; border:none; color:var(--gris); font-size:14px; padding:4px 2px; flex-shrink:0;}
   .mini-btn{background:none; border:1.5px dashed var(--ligne); color:var(--gris); border-radius:11px; padding:11px 12px; font-size:14px; font-weight:600; width:100%;}
   .carte-routine{display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--ligne);}
@@ -117,14 +152,17 @@
   /* ── Voiles plein écran (repos + scan) ── */
   .voile{position:fixed; inset:0; background:rgba(12,13,15,.97); z-index:80; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:24px;}
   .voile .etiquette{font-size:13px; letter-spacing:.3em; color:var(--gris); text-transform:uppercase; font-weight:800;}
-  .mega-temps{font-family:'Archivo'; font-style:italic; font-weight:900; font-size:96px; line-height:1; color:var(--accent);}
+  .mega-temps{font-family:'Unbounded',sans-serif; font-weight:900; font-size:52px; line-height:1;}
+  .anneau-refroidit{position:relative; width:230px; height:230px; display:flex; align-items:center; justify-content:center;}
+  .anneau-refroidit svg{position:absolute; inset:0; transform:rotate(-90deg);}
   .voile .actions{display:flex; gap:12px; margin-top:8px;}
   .voile .actions .btn{padding:16px 26px; font-size:17px;}
   #videoScan{width:100%; max-width:400px; aspect-ratio:3/4; object-fit:cover; border-radius:18px; background:#000; border:1px solid var(--ligne);}
 
   /* ── Repas ── */
   .total-kcal{text-align:center; padding:4px 0 14px;}
-  .total-kcal .gros{font-family:'Archivo'; font-style:italic; font-weight:900; font-size:48px; line-height:1;}
+  .total-kcal .gros{font-family:'Unbounded',sans-serif; font-weight:900; font-size:48px; line-height:1;}
+  .total-kcal .gros > span{background:linear-gradient(135deg, var(--or) 0%, var(--accent) 55%, var(--braise-vif) 100%); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 12px rgba(255,90,31,.4));}
   .total-kcal .gros small{font-size:16px; color:var(--gris); font-weight:700; font-style:normal;}
   .barre-macros{display:flex; height:9px; border-radius:99px; overflow:hidden; background:var(--carte2); margin:12px 0 7px;}
   .legende-macros{display:flex; justify-content:space-between; font-size:11px; color:var(--gris); font-weight:500;}
@@ -135,21 +173,21 @@
   .item-repas .infos{flex:1; min-width:0;}
   .item-repas .nom{font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .item-repas .macros{font-size:11px; color:var(--gris);}
-  .item-repas .kcal{font-family:'Archivo'; font-weight:800; white-space:nowrap;}
+  .item-repas .kcal{font-family:'Unbounded',sans-serif; font-weight:800; white-space:nowrap;}
   .item-repas .suppr{background:none;border:none;color:var(--gris);font-size:15px;padding:4px;}
 
   .modes-ajout{display:flex; gap:8px; margin-bottom:12px;}
-  .modes-ajout button{flex:1; padding:12px 4px; border-radius:12px; border:1.5px solid var(--ligne); background:transparent; color:var(--gris); font-weight:700; font-size:12px; font-family:'Archivo'; text-transform:uppercase;}
-  .modes-ajout button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,107,26,.1);}
+  .modes-ajout button{flex:1; padding:12px 4px; border-radius:12px; border:1.5px solid var(--ligne); background:transparent; color:var(--gris); font-weight:700; font-size:12px; font-family:'Unbounded',sans-serif; text-transform:uppercase;}
+  .modes-ajout button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,90,31,.1);}
   .fiche-produit{background:var(--carte2); border-radius:14px; padding:14px; margin-bottom:12px;}
-  .fiche-produit .nom-produit{font-weight:800; font-family:'Archivo'; font-size:16px;}
+  .fiche-produit .nom-produit{font-weight:800; font-family:'Unbounded',sans-serif; font-size:16px;}
   .fiche-produit .marque-produit{font-size:12px; color:var(--gris); margin-bottom:8px;}
   .resultat-recherche{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:11px 0; border-bottom:1px solid var(--ligne); cursor:pointer;}
   .resultat-recherche:last-child{border-bottom:none;}
 
   .selecteur-user{display:flex; gap:8px; margin-bottom:14px;}
-  .selecteur-user button{flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--ligne); background:transparent; color:var(--gris); font-weight:800; font-family:'Archivo'; font-size:13px; text-transform:uppercase;}
-  .selecteur-user button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,107,26,.1);}
+  .selecteur-user button{flex:1; padding:10px; border-radius:12px; border:1.5px solid var(--ligne); background:transparent; color:var(--gris); font-weight:800; font-family:'Unbounded',sans-serif; font-size:13px; text-transform:uppercase;}
+  .selecteur-user button.actif{border-color:var(--accent); color:var(--craie); background:rgba(255,90,31,.1);}
 
   .apercu-photo{width:100%; max-height:180px; object-fit:cover; border-radius:14px; margin-bottom:10px;}
   .grille-photos{display:flex; gap:10px; overflow-x:auto; padding-bottom:2px; -webkit-overflow-scrolling:touch;}
@@ -161,9 +199,9 @@
   .vide{text-align:center; color:var(--gris); font-size:14px; padding:22px 0; line-height:1.5;}
 
   .jours-scroll{display:flex; gap:8px; overflow-x:auto; padding:2px 2px 8px; margin-bottom:2px; -webkit-overflow-scrolling:touch;}
-  .jours-scroll button{flex-shrink:0; min-width:52px; padding:8px 10px; border-radius:12px; border:1.5px solid var(--ligne); background:var(--carte); color:var(--craie); font-family:'Archivo'; font-weight:800; font-size:15px; text-align:center;}
+  .jours-scroll button{flex-shrink:0; min-width:52px; padding:8px 10px; border-radius:12px; border:1.5px solid var(--ligne); background:var(--carte); color:var(--craie); font-family:'Unbounded',sans-serif; font-weight:800; font-size:15px; text-align:center;}
   .jours-scroll button .jj{display:block; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--gris); font-weight:700; margin-bottom:1px;}
-  .jours-scroll button.actif{border-color:var(--accent); background:rgba(255,107,26,.12); color:var(--accent);}
+  .jours-scroll button.actif{border-color:var(--accent); background:rgba(255,90,31,.12); color:var(--accent);}
   .jours-scroll button.actif .jj{color:var(--accent);}
 
   /* ── Écrans courts / carrés (ex: Unihertz Titan 2 Elite, ~1080×1200) ──
@@ -174,7 +212,9 @@
     .entete h1{font-size:20px;}
     .carte{padding:11px; margin-bottom:8px; border-radius:12px;}
     .carte-titre{margin-bottom:8px;}
-    .mega-temps{font-size:56px;}
+    .mega-temps{font-size:38px;}
+    .anneau-refroidit{width:170px; height:170px;}
+    .anneau-refroidit svg{width:170px; height:170px;}
     .chrono{font-size:26px;}
     .voile{padding:12px; gap:10px;}
     nav button{padding:6px 0 5px; font-size:9px; gap:2px;}
@@ -184,6 +224,7 @@
 </style>
 </head>
 <body>
+<div class="braises" id="braises"></div>
 
 <!-- ═══════════ CONFIGURATION — À REMPLACER ═══════════ -->
 <script>
@@ -258,15 +299,15 @@ service cloud.firestore {
           <div class="carte-titre">Cette semaine</div>
           <div style="display:flex; text-align:center;">
             <div style="flex:1;">
-              <div class="titre" style="font-size:27px;font-weight:900;" id="statSeancesSemaine">0</div>
+              <div class="titre chiffre-fonte" style="font-size:27px;font-weight:900;" id="statSeancesSemaine">0</div>
               <div class="sous-texte">séances (toi)</div>
             </div>
             <div style="flex:1;border-left:1px solid var(--ligne);">
-              <div class="titre" style="font-size:27px;font-weight:900;" id="statSeancesCousin">0</div>
+              <div class="titre chiffre-fonte" style="font-size:27px;font-weight:900;" id="statSeancesCousin">0</div>
               <div class="sous-texte">séances (cousins)</div>
             </div>
             <div style="flex:1;border-left:1px solid var(--ligne);">
-              <div class="titre" style="font-size:27px;font-weight:900;color:var(--accent);" id="statKcalJour">—</div>
+              <div class="titre chiffre-fonte" style="font-size:27px;font-weight:900;" id="statKcalJour">—</div>
               <div class="sous-texte">kcal aujourd'hui</div>
             </div>
           </div>
@@ -311,7 +352,7 @@ service cloud.firestore {
 
       <div id="seanceEnCours" class="hidden">
         <div class="carte">
-          <div class="chrono" id="chrono">00:00</div>
+          <div class="chrono chiffre-fonte" id="chrono">00:00</div>
           <div style="text-align:center;" class="sous-texte">écran maintenu allumé 🔆</div>
           <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px;">
             <span class="sous-texte">Repos entre séries :</span>
@@ -634,7 +675,20 @@ service cloud.firestore {
   <!-- Voile repos plein écran -->
   <div id="voileRepos" class="voile hidden">
     <div class="etiquette">Repos</div>
-    <div class="mega-temps" id="tempsRepos">1:30</div>
+    <div class="anneau-refroidit">
+      <svg width="230" height="230" viewBox="0 0 230 230">
+        <circle cx="115" cy="115" r="102" fill="none" stroke="var(--carte2)" stroke-width="10"/>
+        <circle id="cercleRepos" cx="115" cy="115" r="102" fill="none" stroke="url(#degradeRepos)" stroke-width="10" stroke-linecap="round" stroke-dasharray="641" stroke-dashoffset="0"/>
+        <defs>
+          <linearGradient id="degradeRepos" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FFEFD6"/>
+            <stop offset="45%" stop-color="var(--or)"/>
+            <stop offset="100%" stop-color="var(--accent)"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="mega-temps chiffre-fonte" id="tempsRepos">1:30</div>
+    </div>
     <div class="sous-texte" id="prochaineSerie" style="font-size:15px; text-align:center;"></div>
     <div class="actions">
       <button class="btn btn-contour" onclick="prolongerRepos()">+15 s</button>
@@ -696,6 +750,32 @@ service cloud.firestore {
 
 <script>
 // ═══════════ INIT ═══════════
+// ═══════════ AMBIANCE VISUELLE : braises + ignition ═══════════
+(function(){
+  const reduit = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(reduit) return;
+  const zone = document.getElementById("braises");
+  if(!zone) return;
+  for(let i=0; i<8; i++){
+    const b = document.createElement("div");
+    b.className = "braise-point";
+    const taille = 2 + Math.random()*3;
+    b.style.width = taille+"px";
+    b.style.height = taille+"px";
+    b.style.left = (Math.random()*100)+"%";
+    b.style.setProperty("--derive", (Math.random()*40-20)+"px");
+    b.style.animationDuration = (10 + Math.random()*10)+"s";
+    b.style.animationDelay = (Math.random()*10)+"s";
+    zone.appendChild(b);
+  }
+})();
+function ignite(el){
+  if(!el) return;
+  el.classList.remove("ignite");
+  void el.offsetWidth;
+  el.classList.add("ignite");
+}
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -714,10 +794,13 @@ let userProgresAffiche = null;
 let seanceEnCours = null;
 let routineActive = null;
 let routineEnConstruction = null;
+let serieAIgniter = null;
 let prochainIdExo = 1;
 let intervalChrono = null;
 let intervalRepos = null;
 let reposRestant = 0;
+let reposDureeTotale = 90;
+const CIRCONFERENCE_REPOS = 641;
 let audioCtx = null;
 let wakeLock = null;
 let photoRepasB64 = null;
@@ -926,7 +1009,7 @@ function ligneReactions(collection, id, reactionsObj){
     const b = document.createElement("button");
     b.textContent = emoji + (arr.length ? " " + arr.length : "");
     if(moi && arr.includes(moi.uid)) b.classList.add("actif");
-    b.onclick = (ev) => { ev.stopPropagation(); reagir(collection, id, emoji, arr); };
+    b.onclick = (ev) => { ev.stopPropagation(); ignite(b); reagir(collection, id, emoji, arr); };
     row.appendChild(b);
   });
   return row;
@@ -1211,7 +1294,7 @@ function rendreRoutines(){
     div.className = "carte-routine";
     const infos = document.createElement("div");
     infos.style.flex = "1"; infos.style.minWidth = "0";
-    infos.innerHTML = '<div style="font-family:\u0027Archivo\u0027;font-weight:800;font-size:15px;">'+echap(r.nom)+'</div>'
+    infos.innerHTML = '<div style="font-family:\u0027Unbounded\u0027;font-weight:800;font-size:15px;">'+echap(r.nom)+'</div>'
       + '<div class="sous-texte">'+(r.exos||[]).map(e=>e.nom).join(" · ")+'</div>';
     const btn = document.createElement("button");
     btn.className = "btn btn-accent btn-petit";
@@ -1329,11 +1412,12 @@ function rendreExos(){
     if(exo.suggestion) html += '<div class="badge-sugg">'+echap(exo.suggestion)+'</div>';
     if(exo.supersetPartner){
       const partenaire = seanceEnCours.exos.find(e => e.id===exo.supersetPartner);
-      html += '<div class="badge-sugg" style="color:var(--accent);background:rgba(255,107,26,.13);">🔗 Superset avec '+echap(partenaire ? partenaire.nom : "?")+' <button style="background:none;border:none;color:var(--gris);text-decoration:underline;padding:0 0 0 4px;" onclick="delierSuperset('+exo.id+')">délier</button></div>';
+      html += '<div class="badge-sugg" style="color:var(--accent);background:rgba(255,90,31,.13);">🔗 Superset avec '+echap(partenaire ? partenaire.nom : "?")+' <button style="background:none;border:none;color:var(--gris);text-decoration:underline;padding:0 0 0 4px;" onclick="delierSuperset('+exo.id+')">délier</button></div>';
     }
     html += '<button class="mini-btn" style="margin-bottom:9px;" onclick="toggleEchauffement('+ie+')">🔥 Échauffement suggéré</button>';
     html += '<div id="echauf-'+ie+'" class="sous-texte hidden" style="margin-bottom:9px; line-height:1.5;"></div>';
     exo.series.forEach((s, is) => {
+      const cleSerie = ie+"-"+is;
       html += '<div class="ligne-serie'+(s.fait ? ' faite' : '')+'"><span class="num">S'+(is+1)+'</span>'
         + '<div class="stepper"><button onclick="pasSerie('+ie+','+is+',\u0027reps\u0027,-1)">−</button>'
         + '<input type="number" inputmode="numeric" value="'+echap(s.reps)+'" onchange="majSerie('+ie+','+is+',\u0027reps\u0027,this.value)">'
@@ -1342,7 +1426,7 @@ function rendreExos(){
         + '<div class="stepper"><button onclick="pasSerie('+ie+','+is+',\u0027poids\u0027,-2.5)">−</button>'
         + '<input type="number" inputmode="decimal" value="'+echap(s.poids)+'" onchange="majSerie('+ie+','+is+',\u0027poids\u0027,this.value)">'
         + '<button onclick="pasSerie('+ie+','+is+',\u0027poids\u0027,2.5)">+</button></div>'
-        + '<button class="btn-check'+(s.fait ? ' ok' : '')+'" onclick="cocherSerie('+ie+','+is+')">✓</button>'
+        + '<button class="btn-check'+(s.fait ? ' ok' : '')+(cleSerie===serieAIgniter ? ' ignite' : '')+'" onclick="cocherSerie('+ie+','+is+')">✓</button>'
         + '<button class="suppr-serie" onclick="supprSerie('+ie+','+is+')">✕</button></div>';
     });
     html += '<button class="mini-btn" onclick="ajouterSerie('+ie+')">+ série</button>';
@@ -1394,7 +1478,9 @@ function cocherSerie(ie, is){
   const s = seanceEnCours.exos[ie].series[is];
   if(!s.fait && !serieValide(s)){ toast("Règle les reps et les kg (0 kg = poids du corps)"); return; }
   s.fait = !s.fait;
+  serieAIgniter = s.fait ? (ie+"-"+is) : null;
   rendreExos();
+  serieAIgniter = null;
   if(!s.fait) return;
   const exo = seanceEnCours.exos[ie];
   if(exo.supersetRole==="A"){
@@ -1428,6 +1514,7 @@ function demarrerRepos(ie, is){
     try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
   }
   reposRestant = Number(document.getElementById("dureeRepos").value) || 90;
+  reposDureeTotale = reposRestant;
   document.getElementById("prochaineSerie").textContent = prochaineSerieTexte(ie, is);
   document.getElementById("voileRepos").classList.remove("hidden");
   majAffichageRepos();
@@ -1439,8 +1526,11 @@ function demarrerRepos(ie, is){
 }
 function majAffichageRepos(){
   document.getElementById("tempsRepos").textContent = Math.floor(reposRestant/60)+":"+String(reposRestant%60).padStart(2,"0");
+  const pct = Math.min(1, reposRestant / reposDureeTotale);
+  const cercle = document.getElementById("cercleRepos");
+  if(cercle) cercle.style.strokeDashoffset = CIRCONFERENCE_REPOS * (1 - pct);
 }
-function prolongerRepos(){ reposRestant += 15; majAffichageRepos(); }
+function prolongerRepos(){ reposRestant += 15; reposDureeTotale = Math.max(reposDureeTotale, reposRestant); majAffichageRepos(); }
 function finRepos(sonner){
   clearInterval(intervalRepos);
   document.getElementById("voileRepos").classList.add("hidden");
@@ -1749,7 +1839,7 @@ async function rechercherProduit(){
     div.className = "resultat-recherche";
     div.innerHTML = '<div style="min-width:0;"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+echap(p.nom)+'</div>'
       + '<div class="sous-texte">'+(p.marque==="Aliment de base" ? '🥗 Aliment de base' : echap(p.marque))+'</div></div>'
-      + '<div style="font-family:\u0027Archivo\u0027;font-weight:800;white-space:nowrap;">'+Math.round(p.per100.kcal)+' <span class="sous-texte">kcal/100g</span></div>';
+      + '<div style="font-family:\u0027Unbounded\u0027;font-weight:800;white-space:nowrap;">'+Math.round(p.per100.kcal)+' <span class="sous-texte">kcal/100g</span></div>';
     div.onclick = () => afficherFicheProduit(p);
     c.appendChild(div);
   });
@@ -1767,7 +1857,7 @@ function afficherFicheProduit(produit){
     + '<div class="stepper"><button onclick="pasQuantite(-10)">−</button>'
     + '<input type="number" id="quantiteProduit" inputmode="numeric" value="100" onchange="majFicheProduit()" style="width:60px;">'
     + '<button onclick="pasQuantite(10)">+</button></div>'
-    + '<div id="totalProduit" style="flex:1; text-align:right; font-family:\u0027Archivo\u0027; font-weight:800; font-size:18px;"></div>'
+    + '<div id="totalProduit" style="flex:1; text-align:right; font-family:\u0027Unbounded\u0027; font-weight:800; font-size:18px;"></div>'
     + '</div>'
     + '<div id="macrosProduit" class="sous-texte" style="margin-bottom:12px;"></div>'
     + '<div style="display:flex; gap:8px;">'
@@ -2029,13 +2119,13 @@ function afficherProgression(){
     type: "line",
     data: {
       labels: points.map(p => { const d = new Date(p.ts); return d.getDate()+" "+MOIS[d.getMonth()]; }),
-      datasets: [{ data: points.map(p => p.max), borderColor: "#FF6B1A", backgroundColor: "rgba(255,107,26,.14)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#FF6B1A" }]
+      datasets: [{ data: points.map(p => p.max), borderColor: "#FF5A1F", backgroundColor: "rgba(255,90,31,.14)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#FF5A1F" }]
     },
     options: {
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#8E939B", font: { size: 10 } }, grid: { color: "#1F2126" } },
-        y: { ticks: { color: "#8E939B" }, grid: { color: "#1F2126" } }
+        x: { ticks: { color: "#948A7C", font: { size: 10 } }, grid: { color: "#211B15" } },
+        y: { ticks: { color: "#948A7C" }, grid: { color: "#211B15" } }
       }
     }
   });
@@ -2137,7 +2227,7 @@ function afficherPlan(){
   if(!plan){ c.innerHTML = ""; return; }
   const prog = PROGRAMMES[plan.phase];
   c.innerHTML = '<div style="background:var(--carte2);border-radius:14px;padding:14px;">'
-    + '<div style="text-align:center;margin-bottom:10px;"><div class="titre" style="font-size:36px;font-weight:900;font-style:italic;">'+plan.kcal+'</div><div class="sous-texte">kcal / jour — '+prog.titre+'</div></div>'
+    + '<div style="text-align:center;margin-bottom:10px;"><div class="titre" style="font-size:36px;font-weight:900;">'+plan.kcal+'</div><div class="sous-texte">kcal / jour — '+prog.titre+'</div></div>'
     + '<div style="display:flex;text-align:center;margin-bottom:12px;">'
     + '<div style="flex:1;"><b style="color:var(--vert);">'+plan.prot+' g</b><div class="sous-texte">protéines</div></div>'
     + '<div style="flex:1;"><b style="color:var(--or);">'+plan.gluc+' g</b><div class="sous-texte">glucides</div></div>'
@@ -2482,11 +2572,11 @@ function majCoach(){
   const seanceAuj = mesSeances.some(s => s.userId===moi.uid && s.date===aujourdhuiISO());
 
   if(reste <= 0){
-    zoneReste.innerHTML = '<div style="text-align:center;"><div class="titre" style="font-size:30px;font-weight:900;font-style:italic;color:var(--vert);">Objectif atteint ✔</div>'
+    zoneReste.innerHTML = '<div style="text-align:center;"><div class="titre" style="font-size:30px;font-weight:900;color:var(--vert);">Objectif atteint ✔</div>'
       + '<div class="sous-texte" style="margin-top:4px;">'+(reste<0 ? Math.abs(reste)+' kcal au-dessus de ton objectif' : 'pile sur ton objectif')+'</div></div>';
     zoneProchain.style.display = "none";
   }else{
-    zoneReste.innerHTML = '<div style="text-align:center;"><div class="titre" style="font-size:34px;font-weight:900;font-style:italic;">'+reste+' <span style="font-size:15px;color:var(--gris);font-style:normal;">kcal restantes</span></div>'
+    zoneReste.innerHTML = '<div style="text-align:center;"><div class="titre" style="font-size:34px;font-weight:900;">'+reste+' <span style="font-size:15px;color:var(--gris);font-style:normal;">kcal restantes</span></div>'
       + '<div class="sous-texte" style="margin-top:4px;">encore à manger : P '+pR+' g · G '+gR+' g · L '+lR+' g</div></div>';
     zoneProchain.style.display = "block";
     const FIN = 21.5; // fin de la fenêtre alimentaire (21h30)
@@ -2530,7 +2620,7 @@ function majCoach(){
   const objectifEau = Math.round((plan.poids*35 + (seanceAuj ? 500 : 0))/50)*50;
   const pct = Math.min(100, Math.round(eauMl/objectifEau*100));
   document.getElementById("eauLabel").textContent = (eauMl/1000).toFixed(1).replace(".",",")+" / "+(objectifEau/1000).toFixed(1).replace(".",",")+" L"+(seanceAuj ? " · jour de séance +0,5 L" : "");
-  document.getElementById("barreEau").innerHTML = '<div style="width:'+pct+'%;background:#4DA3FF;"></div>';
+  document.getElementById("barreEau").innerHTML = '<div style="width:'+pct+'%;background:#5C9EAD;"></div>';
 }
 
 async function boireEau(ml){
@@ -2632,7 +2722,7 @@ function rendrePoids(){
   if(miens.length===0){ zone.innerHTML = '<span class="sous-texte">Pèse-toi 1×/semaine, le matin à jeun — je te dirai si ton plan doit être ajusté.</span>'; return; }
   const derniers = miens.slice(-14);
   const labels = derniers.map(p => { const d = new Date(p.timestamp); return d.getDate()+" "+MOIS[d.getMonth()]; });
-  const datasets = [{ label:"Poids", data: derniers.map(p => p.kg), borderColor: "#4DA3FF", backgroundColor: "rgba(77,163,255,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#4DA3FF" }];
+  const datasets = [{ label:"Poids", data: derniers.map(p => p.kg), borderColor: "#5C9EAD", backgroundColor: "rgba(92,158,173,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#5C9EAD" }];
 
   // Trajectoire vers l'objectif de poids, si défini
   if(moi.objectifPoids && moi.objectifPoids.date){
@@ -2642,7 +2732,7 @@ function rendrePoids(){
       const objData = new Array(labels.length).fill(null);
       objData[derniers.length - 1] = derniers[derniers.length - 1].kg; // point de départ : dernière pesée
       objData[labels.length - 1] = moi.objectifPoids.kg;               // point d'arrivée : objectif
-      datasets.push({ label:"Objectif", data: objData, borderColor:"#F2B84B", borderDash:[6,4], spanGaps:true, pointRadius:4, pointBackgroundColor:"#F2B84B", fill:false });
+      datasets.push({ label:"Objectif", data: objData, borderColor:"#FFB020", borderDash:[6,4], spanGaps:true, pointRadius:4, pointBackgroundColor:"#FFB020", fill:false });
       datasets[0].data = [...datasets[0].data, null]; // aligne la longueur avec le label ajouté
     }
   }
@@ -2650,7 +2740,7 @@ function rendrePoids(){
   graphPoids = new Chart(canvas, {
     type: "line",
     data: { labels: labels, datasets: datasets },
-    options: { plugins:{legend:{display: datasets.length>1}}, scales:{ x:{ticks:{color:"#8E939B",font:{size:10}},grid:{color:"#1F2126"}}, y:{ticks:{color:"#8E939B"},grid:{color:"#1F2126"}} } }
+    options: { plugins:{legend:{display: datasets.length>1}}, scales:{ x:{ticks:{color:"#948A7C",font:{size:10}},grid:{color:"#211B15"}}, y:{ticks:{color:"#948A7C"},grid:{color:"#211B15"}} } }
   });
   zone.innerHTML = analysePoids(miens) + texteObjectifPoids(miens);
 }
@@ -2887,9 +2977,9 @@ function dessinerGraphMensuration(){
     type: "line",
     data: {
       labels: derniers.map(m => { const d = new Date(m.timestamp); return d.getDate()+" "+MOIS[d.getMonth()]; }),
-      datasets: [{ data: derniers.map(m => m[type]), borderColor: "#4CC38A", backgroundColor: "rgba(76,195,138,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#4CC38A" }]
+      datasets: [{ data: derniers.map(m => m[type]), borderColor: "#6FBF73", backgroundColor: "rgba(111,191,115,.12)", fill: true, tension: .3, pointRadius: 4, pointBackgroundColor: "#6FBF73" }]
     },
-    options: { plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#8E939B",font:{size:10}},grid:{color:"#1F2126"}}, y:{ticks:{color:"#8E939B"},grid:{color:"#1F2126"}} } }
+    options: { plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#948A7C",font:{size:10}},grid:{color:"#211B15"}}, y:{ticks:{color:"#948A7C"},grid:{color:"#211B15"}} } }
   });
   const dernier = miennes[miennes.length-1];
   const dd = new Date(dernier.timestamp);
@@ -2984,7 +3074,7 @@ function rendreCalendrierRegularite(){
     cellules.push(compte[iso]||0);
   }
   c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">' + cellules.map(n => {
-    const couleur = n===0 ? "var(--carte2)" : (n===1 ? "rgba(255,107,26,.5)" : "var(--accent)");
+    const couleur = n===0 ? "var(--carte2)" : (n===1 ? "rgba(255,90,31,.5)" : "var(--accent)");
     return '<div style="aspect-ratio:1;border-radius:3px;background:'+couleur+';"></div>';
   }).join("") + '</div><div class="sous-texte" style="margin-top:6px;">8 dernières semaines</div>';
 }
