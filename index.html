@@ -2375,9 +2375,9 @@ function afficherProfilMembre(uid){
   html += '<div class="carte"><div class="carte-titre">Ses dernières séances <span class="sous-texte" style="text-transform:none;letter-spacing:0;">taper pour le détail</span></div><div id="listeSeancesMembre">'
     + (dernieres.length===0 ? '<div class="vide">Aucune séance</div>' : '')
     + '</div></div>';
-  const moiSexe = moi.sexe;
-  const proprietaireSexe = u.sexe;
-  const peutVoirPhotos = uid===moi.uid || !moiSexe || !proprietaireSexe || moiSexe===proprietaireSexe;
+  const moiSexe = moi.sexe || (moi.plan && moi.plan.sexe);
+  const proprietaireSexe = u.sexe || (u.plan && u.plan.sexe);
+  const peutVoirPhotos = uid===moi.uid || (moiSexe && proprietaireSexe && moiSexe===proprietaireSexe);
   const photosMembre = peutVoirPhotos ? tousPhotosProgres.filter(p => p.userId===uid) : [];
   html += '<div class="carte"><div class="carte-titre">Photos de progression 📸</div><div class="grille-photos" id="photosMembre">'
     + (photosMembre.length===0 ? '<div class="vide">'+(peutVoirPhotos ? 'Aucune photo pour l\u2019instant' : '🔒 Non partagées avec ce profil')+'</div>' : '')
