@@ -272,6 +272,11 @@ service cloud.firestore {
       <div id="zonePrenom" class="hidden">
         <label>Ton prénom</label>
         <input type="text" id="prenom" class="champ" autocomplete="given-name">
+        <label>Sexe <span class="sous-texte" style="text-transform:none;letter-spacing:0;">(pour tes calories et la confidentialité des photos)</span></label>
+        <select id="sexeInscription" class="champ">
+          <option value="h">Homme</option>
+          <option value="f">Femme</option>
+        </select>
       </div>
       <button class="btn btn-accent" id="btnConnexion" onclick="connexion()">Se connecter</button>
       <div style="text-align:center; margin-top:12px;">
@@ -855,8 +860,9 @@ async function connexion(){
     if(modeInscription){
       const prenom = document.getElementById("prenom").value.trim();
       if(!prenom){ err.textContent = "Indique ton prénom"; return; }
+      const sexe = document.getElementById("sexeInscription").value;
       const cred = await auth.createUserWithEmailAndPassword(email, mdp);
-      await db.collection("users").doc(cred.user.uid).set({ prenom: prenom, objectifKcal: null, plan: null, creeLe: Date.now() });
+      await db.collection("users").doc(cred.user.uid).set({ prenom: prenom, sexe: sexe, objectifKcal: null, plan: null, creeLe: Date.now() });
     }else{
       await auth.signInWithEmailAndPassword(email, mdp);
     }
@@ -881,7 +887,7 @@ auth.onAuthStateChanged(async (user) => {
   if(user){
     const doc = await db.collection("users").doc(user.uid).get();
     const d = doc.exists ? doc.data() : { prenom: "Moi" };
-    moi = { uid: user.uid, prenom: d.prenom, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [], objectifPoids: d.objectifPoids || null };
+    moi = { uid: user.uid, prenom: d.prenom, sexe: d.sexe || null, objectifKcal: d.objectifKcal || null, plan: d.plan || null, favoris: d.favoris || [], objectifPoids: d.objectifPoids || null };
     userRepasAffiche = moi.uid;
     userSeanceAffiche = moi.uid;
     userProgresAffiche = moi.uid;
@@ -907,7 +913,7 @@ auth.onAuthStateChanged(async (user) => {
 // ═══════════ ÉCOUTES TEMPS RÉEL ═══════════
 function demarrerEcoutes(){
   db.collection("users").onSnapshot(snap => {
-    tousLesUsers = snap.docs.map(d => ({ uid: d.id, prenom: d.data().prenom, plan: d.data().plan || null, fcmToken: d.data().fcmToken || null }));
+    tousLesUsers = snap.docs.map(d => ({ uid: d.id, prenom: d.data().prenom, sexe: d.data().sexe || null, plan: d.data().plan || null, fcmToken: d.data().fcmToken || null }));
     rendreSelecteursUsers();
     rendreSelecteurEquipe();
     rendreDefiMois();
@@ -2215,7 +2221,8 @@ async function calculerPlan(){
   const gluc = Math.max(0, Math.round((kcal - prot*4 - lip*9) / 4));
   moi.plan = { phase, kcal, prot, gluc, lip, sexe, age, taille, poids, activite };
   moi.objectifKcal = kcal;
-  await db.collection("users").doc(moi.uid).update({ plan: moi.plan, objectifKcal: kcal });
+  moi.sexe = sexe;
+  await db.collection("users").doc(moi.uid).update({ plan: moi.plan, objectifKcal: kcal, sexe: sexe });
   afficherPlan();
   rendreRepas();
   toast("Plan calculé ✔");
@@ -2247,6 +2254,8 @@ function remplirChampsPlan(){
     document.getElementById("pPoids").value = p.poids;
     document.getElementById("pActivite").value = String(p.activite);
     document.getElementById("pPhase").value = p.phase;
+  }else if(moi.sexe){
+    document.getElementById("pSexe").value = moi.sexe;
   }
   afficherPlan();
   if(moi.objectifPoids){
@@ -2366,9 +2375,12 @@ function afficherProfilMembre(uid){
   html += '<div class="carte"><div class="carte-titre">Ses dernières séances <span class="sous-texte" style="text-transform:none;letter-spacing:0;">taper pour le détail</span></div><div id="listeSeancesMembre">'
     + (dernieres.length===0 ? '<div class="vide">Aucune séance</div>' : '')
     + '</div></div>';
-  const photosMembre = tousPhotosProgres.filter(p => p.userId===uid);
+  const moiSexe = moi.sexe;
+  const proprietaireSexe = u.sexe;
+  const peutVoirPhotos = uid===moi.uid || !moiSexe || !proprietaireSexe || moiSexe===proprietaireSexe;
+  const photosMembre = peutVoirPhotos ? tousPhotosProgres.filter(p => p.userId===uid) : [];
   html += '<div class="carte"><div class="carte-titre">Photos de progression 📸</div><div class="grille-photos" id="photosMembre">'
-    + (photosMembre.length===0 ? '<div class="vide">Aucune photo pour l\u2019instant</div>' : '')
+    + (photosMembre.length===0 ? '<div class="vide">'+(peutVoirPhotos ? 'Aucune photo pour l\u2019instant' : '🔒 Non partagées avec ce profil')+'</div>' : '')
     + '</div>'
     + (photosMembre.length>=2 ? '<div style="margin-top:12px;border-top:1px solid var(--ligne);padding-top:12px;">'
       + '<div class="ligne-champs"><div><label>Avant</label><select id="photoAvantMembre" class="champ"></select></div><div><label>Après</label><select id="photoApresMembre" class="champ"></select></div></div>'
